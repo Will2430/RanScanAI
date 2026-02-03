@@ -1,0 +1,36 @@
+<!-- Note: These are SVG placeholders. For production, convert to PNG using online tools -->
+<!-- Recommended: https://realfavicongenerator.net/ -->
+
+<!-- icon16.png -->
+<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+  <rect width="16" height="16" fill="#4CAF50" rx="3"/>
+  <path d="M8 2L3 4.5V7.5C3 10.5 5.2 13.2 8 14C10.8 13.2 13 10.5 13 7.5V4.5L8 2Z" 
+        fill="white"/>
+  <path d="M6 8L7 9L10 6" stroke="#4CAF50" stroke-width="1.5" 
+        stroke-linecap="round" fill="none"/>
+</svg>
+
+<!-- icon32.png -->
+<svg width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" fill="#4CAF50" rx="6"/>
+  <path d="M16 4L6 9V15C6 21 10.4 26.4 16 28C21.6 26.4 26 21 26 15V9L16 4Z" 
+        fill="white"/>
+  <path d="M12 16L14 18L20 12" stroke="#4CAF50" stroke-width="2" 
+        stroke-linecap="round" fill="none"/>
+</svg>
+
+<!-- icon48.png -->
+<svg width="48" height="48" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" fill="#4CAF50" rx="10"/>
+  <path d="M24 6L9 13.5V22.5C9 31.5 15.6 39.6 24 42C32.4 39.6 39 31.5 39 22.5V13.5L24 6Z" 
+        fill="white"/>
+  <path d="M18 24L21 27L30 18" stroke="#4CAF50" stroke-width="3" 
+        stroke-linecap="round" fill="none"/>
+</svg>
+
+To convert these to PNG:
+1. Copy each SVG code
+2. Go to https://svgtopng.com/ or https://cloudconvert.com/svg-to-png
+3. Paste SVG code
+4. Convert to PNG
+5. Save as icon16.png, icon32.png, icon48.png, icon128.png in browser-extension/icons/

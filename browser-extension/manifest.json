@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "SecureGuard - Privacy-First Malware Scanner",
+  "version": "1.0.0",
+  "description": "Local-first malware detection with hybrid AI analysis. Scan files privately without uploading to the cloud.",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "notifications",
+    "nativeMessaging"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

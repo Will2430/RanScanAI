@@ -1,0 +1,9 @@
+<!-- Placeholder icons - Replace with actual icons -->
+<!-- For now, create simple SVG icons or use a tool like https://realfavicongenerator.net/ -->
+<svg width="128" height="128" xmlns="http://www.w3.org/2000/svg">
+  <rect width="128" height="128" fill="#4CAF50" rx="24"/>
+  <path d="M64 20L25 40V58C25 82.3 40.8 105.5 64 112C87.2 105.5 103 82.3 103 58V40L64 20Z" 
+        fill="white" stroke="white" stroke-width="3"/>
+  <path d="M50 64L58 72L78 52" stroke="#4CAF50" stroke-width="6" 
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

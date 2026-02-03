@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SecureGuard - Privacy-First Scanner</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L3 7V11C3 16.55 6.84 21.74 12 23C17.16 21.74 21 16.55 21 11V7L12 2Z" stroke="#4CAF50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M9 12L11 14L15 10" stroke="#4CAF50" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h1>SecureGuard</h1>
+      </div>
+      <div class="status-group">
+        <div class="status" id="backendStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">Backend: Checking...</span>
+        </div>
+        <div class="status" id="nativeHostStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">Native Host: Checking...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stats Section -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="totalScans">0</div>
+        <div class="stat-label">Total Scans</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="threatsDetected">0</div>
+        <div class="stat-label">Threats</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="cleanFiles">0</div>
+        <div class="stat-label">Clean</div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <button id="scanFileBtn" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        Scan File
+      </button>
+
+      <button id="viewHistoryBtn" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        History
+      </button>
+      <button id="quarantineBtn" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        Quarantine
+      </button>
+
+         <!-- Quarantine Section -->
+    <div class="section" id="quarantineSection" style="display: none;">
+      <div class="section-header">
+        <h3>🔒 Quarantined Files</h3>
+        <button id="refreshQuarantineBtn" class="btn-text">Refresh</button>
+      </div>
+      <div id="quarantineList" class="quarantine-list">
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc">
+            <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <p>No quarantined files</p>
+          <small>Malicious files will be quarantined here</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Scans -->
+    <div class="section">
+      <div class="section-header">
+        <h3>Recent Scans</h3>
+        <button id="clearHistoryBtn" class="btn-text">Clear</button>
+      </div>
+      <div id="recentScans" class="scan-list">
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ccc">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <p>No scans yet</p>
+          <small>Right-click on files to scan them</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <div class="footer-info">
+        <span class="privacy-badge">
+          🔒 100% Local Processing
+        </span>
+        <span class="version">v1.0.0</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
