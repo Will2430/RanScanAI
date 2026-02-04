@@ -5,6 +5,7 @@
   "description": "Local-first malware detection with hybrid AI analysis. Scan files privately without uploading to the cloud.",
   "permissions": [
     "contextMenus",
+    "downloads",
     "storage",
     "notifications",
     "nativeMessaging"

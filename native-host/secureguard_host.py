@@ -337,6 +337,10 @@ def main():
                     'error': f'Unknown action: {action}'
                 }
             
+            # Preserve messageId if present (for extension correlation)
+            if 'messageId' in message:
+                response['messageId'] = message['messageId']
+            
             # Send response back to extension
             logging.info(f"📤 SENDING RESPONSE: {json.dumps(response, indent=2)}")
             send_message(response)
@@ -351,4 +355,8 @@ def main():
             'success': False,
             'error': f'Fatal error: {str(e)}'
         })
+
+
+if __name__ == "__main__":
+    main()
     

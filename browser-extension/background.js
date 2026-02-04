@@ -21,25 +21,61 @@ chrome.runtime.onInstalled.addListener(() => {
   connectToNativeHost();
 });
 
+// Automatically monitor ALL downloads
+if (chrome.downloads && chrome.downloads.onCreated) {
+  chrome.downloads.onCreated.addListener((downloadItem) => {
+    console.log('[DEBUG] 📥 New download detected:', downloadItem.filename);
+    console.log('[DEBUG] Download ID:', downloadItem.id);
+    // Monitor this download
+    monitorDownload(downloadItem.id);
+  });
+} else {
+  console.error('[ERROR] chrome.downloads API not available - download monitoring disabled');
+}
+
+// Pending requests waiting for responses
+const pendingRequests = new Map();
+
 // Connect to native messaging host
 function connectToNativeHost() {
   try {
+    console.log('[DEBUG] 🔌 Attempting to connect to native host:', NATIVE_HOST_NAME);
     nativePort = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+    console.log('[DEBUG] ✅ Native port created successfully');
     
+    // Single message listener that routes based on messageId
     nativePort.onMessage.addListener((message) => {
-      console.log('Received from native host:', message);
-      handleNativeResponse(message);
+      console.log('[DEBUG] 📥 Received from native host:', message);
+      
+      // If message has messageId, it's a response to a pending request
+      if (message.messageId && pendingRequests.has(message.messageId)) {
+        const { resolve } = pendingRequests.get(message.messageId);
+        pendingRequests.delete(message.messageId);
+        console.log('[DEBUG] ✅ Matched messageId, resolving promise');
+        resolve(message);
+      } else {
+        // Otherwise, handle as unsolicited message
+        console.log('[DEBUG] 📢 No matching messageId, handling as unsolicited');
+        handleNativeResponse(message);
+      }
     });
     
     nativePort.onDisconnect.addListener(() => {
-      console.log('Disconnected from native host');
+      console.log('[DEBUG] ⚠️ Disconnected from native host');
       isNativeHostConnected = false;
       
       if (chrome.runtime.lastError) {
-        console.error('Native host error:', chrome.runtime.lastError.message);
+        console.error('[DEBUG] ❌ Native host error:', chrome.runtime.lastError.message);
       }
       
+      // Reject all pending requests
+      for (const [messageId, { reject }] of pendingRequests.entries()) {
+        reject(new Error('Native host disconnected'));
+      }
+      pendingRequests.clear();
+      
       // Retry connection after 5 seconds
+      console.log('[DEBUG] 🔄 Will retry connection in 5 seconds...');
       setTimeout(connectToNativeHost, 5000);
     });
     
@@ -74,21 +110,14 @@ function sendToNativeHost(message) {
       return;
     }
     
-    // Create callback for this specific message
+    // Create unique message ID
     const messageId = Date.now() + Math.random();
     message.messageId = messageId;
     
     console.log('[DEBUG] 📤 Sending to native host:', message);
     
-    const listener = (response) => {
-      console.log('[DEBUG] 📥 Received from native host:', response);
-      if (response.messageId === messageId || !response.messageId) {
-        nativePort.onMessage.removeListener(listener);
-        resolve(response);
-      }
-    };
-    
-    nativePort.onMessage.addListener(listener);
+    // Store the resolve/reject for this request
+    pendingRequests.set(messageId, { resolve, reject });
     
     // Send message
     try {
@@ -96,14 +125,18 @@ function sendToNativeHost(message) {
       console.log('[DEBUG] ✅ Message posted successfully');
     } catch (error) {
       console.error('[DEBUG] ❌ Failed to post message:', error);
+      pendingRequests.delete(messageId);
       reject(error);
+      return;
     }
     
     // Timeout after 30 seconds
     setTimeout(() => {
-      console.warn('[DEBUG] ⏰ Timeout waiting for response');
-      nativePort.onMessage.removeListener(listener);
-      reject(new Error('Native host timeout'));
+      if (pendingRequests.has(messageId)) {
+        console.warn('[DEBUG] ⏰ Timeout waiting for response');
+        pendingRequests.delete(messageId);
+        reject(new Error('Native host timeout'));
+      }
     }, 30000);
   });
 }
@@ -242,7 +275,7 @@ async function scanDownloadedFile(filePath, downloadId) {
       // Use native messaging for true mitigation if available
       console.log('[DEBUG] Quarantine check - Connected:', isNativeHostConnected, 'Confidence:', result.confidence);
       
-      if (isNativeHostConnected && result.confidence > 0.6) {
+      if (isNativeHostConnected && result.confidence > 0.4) {
         console.log('[DEBUG] ✅ Eligible for quarantine!');
         // Get the full file path first
         chrome.downloads.search({ id: downloadId }, async (items) => {
@@ -300,11 +333,11 @@ async function scanDownloadedFile(filePath, downloadId) {
         if (!isNativeHostConnected) {
           console.log('[DEBUG]   Reason: Native host NOT connected');
         }
-        if (result.confidence <= 0.6) {
+        if (result.confidence <= 0.4) {
           console.log('[DEBUG]   Reason: Confidence too low (' + result.confidence + ')');
         }
         // Fallback: browser-level mitigation (cancel/remove)
-        if (result.confidence > 0.6) {
+        if (result.confidence > 0.4) {
           console.log('[DEBUG] 🗑️ Using browser-level removal');
           chrome.downloads.cancel(downloadId);
           chrome.downloads.removeFile(downloadId);
