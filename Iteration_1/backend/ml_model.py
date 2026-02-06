@@ -7,6 +7,7 @@ import joblib
 import pandas as pd
 import numpy as np
 import json
+import os
 import time
 from pathlib import Path
 from typing import Dict, Any, List
@@ -26,11 +27,37 @@ class MalwareDetector:
             model_path: Path to .pkl model file
             metadata_path: Path to model metadata JSON
         """
-        # Default paths (relative to project root)
+        # Default paths (discover project root and support env overrides)
+        # Project root is two parents up from this file: RanScanAI/
+        project_root = Path(__file__).resolve().parents[2]
+
+        # Allow environment overrides (useful for deployment/testing)
+        env_model = os.environ.get('SECUREGUARD_MODEL_PATH') if 'os' in globals() else None
+        env_meta = os.environ.get('SECUREGUARD_METADATA_PATH') if 'os' in globals() else None
+
         if model_path is None:
-            model_path = "C:\\Users\\willi\\OneDrive\\Test\\K\\malware_detector_zenodo_v1.pkl"
+            # Check environment override first, then project root, then current working dir
+            if env_model:
+                model_path = env_model
+            else:
+                candidate = project_root / 'malware_detector_zenodo_v1.pkl'
+                if candidate.exists():
+                    model_path = str(candidate)
+                else:
+                    # fallback to repo root and cwd
+                    candidate_cwd = Path.cwd() / 'malware_detector_zenodo_v1.pkl'
+                    model_path = str(candidate_cwd) if candidate_cwd.exists() else str(project_root / 'malware_detector_zenodo_v1.pkl')
+
         if metadata_path is None:
-            metadata_path = "C:\\Users\\willi\\OneDrive\\Test\\K\\zenodo_model_metadata.json"
+            if env_meta:
+                metadata_path = env_meta
+            else:
+                candidate_meta = project_root / 'zenodo_model_metadata.json'
+                if candidate_meta.exists():
+                    metadata_path = str(candidate_meta)
+                else:
+                    candidate_meta_cwd = Path.cwd() / 'zenodo_model_metadata.json'
+                    metadata_path = str(candidate_meta_cwd) if candidate_meta_cwd.exists() else str(project_root / 'zenodo_model_metadata.json')
         
         self.model_path = Path(model_path)
         self.metadata_path = Path(metadata_path)
