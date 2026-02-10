@@ -1,10 +1,10 @@
-# 🛡️ SecureGuard - Privacy-First Malware Detection System
+# 🛡️ RanScanAI - Privacy-First Malware Detection System
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![ML Accuracy](https://img.shields.io/badge/accuracy-99.3%25-success.svg)](docs/model.md)
 
-**SecureGuard** is a privacy-preserving malware detection system designed for SMEs. It performs **local-first scanning** using a hybrid AI model (99.3% accurate) and optionally enriches threats with VirusTotal intelligence - without uploading benign files to the cloud.
+**RanScanAI** is a privacy-preserving malware detection system designed for SMEs. It performs **local-first scanning** using a hybrid AI model (99.3% accurate) and optionally enriches threats with VirusTotal intelligence - without uploading benign files to the cloud.
 
 ![SecureGuard Architecture](https://via.placeholder.com/800x400?text=SecureGuard+Architecture)
 
