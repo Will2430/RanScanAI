@@ -47,11 +47,18 @@ Credentials
 .env
 *.key
 *.pem
+**/vt_config.json
+**/config_files/vt_config.json
 
 # Large Files (uploaded separately)
 *.csv
+*.keras
+*.h5
+*.pkl
 Dataset/
 output/
+models/*.keras
+models/*.h5
 
 # Temporary Files
 *.tmp
