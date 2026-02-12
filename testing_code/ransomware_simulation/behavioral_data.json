@@ -1,0 +1,101 @@
+{
+  "target": "C:\\Users\\User\\OneDrive\\Test\\K\\testing_code\\ransomware_simulation\\ransomware_simulator.py",
+  "start_time": "2026-02-11T17:52:23.632370",
+  "registry": {
+    "read": 6923,
+    "write": 60,
+    "delete": 0,
+    "keys_modified": [
+      "HKCU\\Software\\TestRansomware",
+      "HKCU\\Software\\TestRansomware\\Persistence",
+      "HKCU\\Software\\TestRansomware\\Encryption",
+      "HKCU\\Software\\TestRansomware\\C2Config"
+    ]
+  },
+  "network": {
+    "dns": 1000,
+    "http": 10,
+    "connections": 1010,
+    "domains": [
+      "c2-server.malware-test.invalid",
+      "evil-command-control.invalid",
+      "ransomware-payment.invalid"
+    ]
+  },
+  "processes": {
+    "total": 50,
+    "created": []
+  },
+  "files": {
+    "created": [
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\o1OGcclgXTyg.pdf",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\wwefRlvu6guz.doc",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\0fEKXclmWVY1.jpg",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\I2gbsMwBffe2.pdf",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\7CbpDdQwYsEA.xlsx",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\smaKhbb5qWDI.pdf",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\iWJebMxTJ43e.txt",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\d2RcnOKXlGpj.txt",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\5hbBDkTFOwQQ.txt",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\9MIB3zcLD6tr.pdf",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\xR2hIgtwNnmj.xlsx",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\B6YV28o7kQCS.txt",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\zL9y80VKHCjF.jpg",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\JfCqokQMS7Wr.jpg",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\BC5j7w4Hc8Nq.xlsx",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\ty65CZpPeRbc.xlsx",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\MajtOvZjDv9D.pdf",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\a9RrtvWK6JDR.jpg",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\CpHWNl0h6StN.xlsx",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\Tgq3SBHoRrkm.doc"
+    ],
+    "encrypted": [
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\o1OGcclgXTyg.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\wwefRlvu6guz.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\0fEKXclmWVY1.crypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\I2gbsMwBffe2.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\7CbpDdQwYsEA.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\smaKhbb5qWDI.crypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\iWJebMxTJ43e.crypto",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\d2RcnOKXlGpj.crypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\5hbBDkTFOwQQ.crypto",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\9MIB3zcLD6tr.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\xR2hIgtwNnmj.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\B6YV28o7kQCS.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\zL9y80VKHCjF.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\JfCqokQMS7Wr.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\BC5j7w4Hc8Nq.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\ty65CZpPeRbc.crypto",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\MajtOvZjDv9D.crypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\a9RrtvWK6JDR.crypto",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\CpHWNl0h6StN.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\Tgq3SBHoRrkm.locked"
+    ],
+    "deleted": [
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\ty65CZpPeRbc.crypto",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\a9RrtvWK6JDR.crypto",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\Tgq3SBHoRrkm.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\OILXlIBTeMdu.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\oAFC9JvaPzB3.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\TUM7HRJB0Ii8.crypto",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\yEqGHqmPpuPr.crypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\sIXcflGy85NP.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\mTNArmQyWpHR.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\Dy6zlf9xBbO8.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\fS66TLlt67yD.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\oCOUldyB1vTb.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\s0vShIheaOgO.crypto",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\TJ95kfmlFF0L.encrypted",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\KJmQZp3JZXho.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\dNJGsl7Cpziv.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\360uKDdMl4D9.locked",
+      "C:\\Users\\User\\Downloads\\RANSOMWARE_TEST_FOLDER\\CWdS4RxY7N8s.crypted"
+    ],
+    "suspicious": 500,
+    "malicious": 500
+  },
+  "dlls": [],
+  "apis": 0,
+  "execution_time": 27.828941106796265,
+  "status": "completed"
+}

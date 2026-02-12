@@ -1,0 +1,141 @@
+================================================================
+VM BEHAVIORAL MONITORING SETUP
+================================================================
+
+OVERVIEW:
+This package contains everything needed to run behavioral
+monitoring tests on ransomware simulation in a VM.
+
+================================================================
+STEP 1: VM SETUP
+================================================================
+1. Create a Windows VM (VirtualBox/VMware/Hyper-V)
+   - OS: Windows 10/11
+   - RAM: 4GB minimum
+   - Disk: 50GB
+   - Snapshot: Take clean snapshot BEFORE testing
+
+2. Install Python 3.10+ in VM:
+   Download: https://www.python.org/downloads/
+   During install: Check "Add Python to PATH"
+
+3. Transfer this entire folder to VM:
+   - USB drive
+   - Shared folder
+   - Network share
+
+================================================================
+STEP 2: INSTALL DEPENDENCIES
+================================================================
+Open PowerShell in this folder and run:
+
+   pip install -r requirements.txt
+
+This installs:
+- psutil (process monitoring)
+- cryptography (encryption simulation)
+- pywin32 (Windows API access)
+
+================================================================
+STEP 3: RUN BEHAVIORAL MONITORING
+================================================================
+
+Option A: Monitor Python Script
+--------------------------------
+1. Create test folder:
+   python setup_test_environment.py
+
+2. Run behavioral monitor:
+   python vm_behavioral_monitor.py ransomware_simulator.py C:\Users\User\Downloads\RANSOMWARE_TEST_FOLDER
+
+
+Option B: Monitor Compiled .exe
+--------------------------------
+1. Create test folder:
+   python setup_test_environment.py
+
+2. Run behavioral monitor on exe:
+   python vm_behavioral_monitor.py dist\RansomwareSimulator.exe C:\Users\User\Downloads\RANSOMWARE_TEST_FOLDER
+
+
+================================================================
+STEP 4: COLLECT RESULTS
+================================================================
+After execution completes, you'll find:
+
+  behavioral_data.json  - Runtime behavioral data
+
+Copy this file back to your host machine for analysis.
+
+================================================================
+STEP 5: CLEANUP
+================================================================
+1. Revert VM to clean snapshot
+   (Important: Don't keep ransomware artifacts)
+
+2. Delete test folder:
+   rmdir /s /q C:\Users\User\Downloads\RANSOMWARE_TEST_FOLDER
+
+3. Delete registry entries:
+   reg delete "HKCU\Software\TestRansomware" /f
+   reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v TestRansomware /f
+
+================================================================
+BEHAVIORAL DATA CAPTURED:
+================================================================
+- Registry writes: 200+ operations
+- Network activity: 50+ DNS queries, 15+ connections
+- Process spawning: 10+ child processes
+- DLL loading: 7+ system libraries
+- File operations: Created, deleted, encrypted
+
+================================================================
+EXPECTED RESULTS:
+================================================================
+Registry:
+  Writes: 200+  (massive tracking/persistence)
+  Deletes: 0-5
+
+Network:
+  DNS queries: 50+  (C2 server lookups)
+  Connections: 15+  (C2 connection attempts)
+
+Processes:
+  Created: 10+  (cmd.exe, powershell, wmic)
+
+Files:
+  Created: 1-10  (.locked files + ransom note)
+  Deleted: 1-10  (original files)
+  Encrypted: 1-10
+
+DLLs:
+  Loaded: 7+  (bcrypt.dll, advapi32.dll, etc.)
+
+================================================================
+SAFETY NOTES:
+================================================================
+- This is a SIMULATION - safe for testing
+- Only affects C:\Users\User\Downloads\RANSOMWARE_TEST_FOLDER
+- Registry writes are HKCU only (user-level, removable)
+- Network attempts will fail (fake domains)
+- Run in VM only for isolation
+- Take snapshot before testing
+- Revert snapshot after testing
+
+================================================================
+TROUBLESHOOTING:
+================================================================
+"Module not found" errors:
+  pip install psutil cryptography pywin32
+
+"Test folder not found":
+  python setup_test_environment.py
+
+"Permission denied":
+  Run PowerShell as Administrator
+
+behavioral_data.json not created:
+  Check for errors in monitor output
+  Verify target exe/script ran successfully
+
+================================================================

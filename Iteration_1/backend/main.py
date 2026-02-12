@@ -13,18 +13,52 @@ from typing import Optional, Dict, Any
 import os
 import sys
 
-# Add parent directory to path to import existing modules
-sys.path.append(str(Path(__file__).parent.parent))
+# Load environment variables from .env file (optional)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # Load .env file if it exists
+except ImportError:
+    pass  # dotenv not installed, will use system env vars only
 
-from backend.ml_model import MalwareDetector
-from backend.vt_integration import VirusTotalEnricher
-
-# Configure logging
+# Configure logging FIRST
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Add parent and workspace root directories to path for imports
+workspace_root = Path(__file__).parent.parent.parent  # K/
+sys.path.insert(0, str(workspace_root))  # For migration_package imports
+sys.path.insert(0, str(Path(__file__).parent.parent))  # For Iteration_1/ imports
+
+# Import model modules
+try:
+    from models.ml_model import MalwareDetector
+except ImportError:
+    from iteration_1.backend.models.ml_model import MalwareDetector
+
+# CNN client is optional (only if you have CNN service running)
+CNNModelClient = None
+try:
+    from iteration_1.backend.models.cnn_client import CNNModelClient
+    logger.info("✓ CNN client module imported successfully")
+except ImportError as e:
+    logger.debug(f"Could not import from migration_package.cnn_client: {e}")
+
+try:
+    from iteration_1.backend.vt_integration import VirusTotalEnricher
+except ImportError:
+    from vt_integration import VirusTotalEnricher
+
+# Configuration
+# Toggle between Traditional ML and CNN model
+USE_CNN_MODEL = os.getenv("USE_CNN_MODEL", "false").lower() == "true"  # Set to "true" to enable CNN
+CNN_MODEL_SERVICE_URL = os.getenv("CNN_MODEL_SERVICE_URL", "http://127.0.0.1:8001")
+
+# OR override directly (uncomment to use):
+USE_CNN_MODEL = True  # Change this to True to use CNN model
+CNN_MODEL_SERVICE_URL = "http://127.0.0.1:8001"  # CNN service URL
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -44,6 +78,7 @@ app.add_middleware(
 
 # Global instances
 detector: Optional[MalwareDetector] = None
+cnn_detector: Optional[CNNModelClient] = None  # Now using HTTP client
 vt_enricher: Optional[VirusTotalEnricher] = None
 
 
@@ -68,22 +103,44 @@ class ScanResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Initialize ML model and services on startup"""
-    global detector, vt_enricher
+    global detector, cnn_detector, vt_enricher
     
     logger.info("🚀 Starting SecureGuard Backend...")
     
     try:
-        # Initialize ML detector
-        logger.info("Loading ML model...")
-        detector = MalwareDetector()
-        logger.info(f"✓ Model loaded successfully ({detector.model_size_mb:.2f} MB)")
+        # Choose model based on configuration
+        if USE_CNN_MODEL and CNNModelClient is not None:
+            logger.info("Connecting to CNN model service...")
+            try:
+                # Connect to model service (runs in Python 3.10 with TensorFlow)
+                cnn_detector = CNNModelClient(service_url=CNN_MODEL_SERVICE_URL)
+                logger.info(f"✓ Connected to CNN model service at {CNN_MODEL_SERVICE_URL}")
+                logger.info(f"  Model type: 1D CNN (via HTTP)")
+            except Exception as e:
+                logger.warning(f"Failed to connect to CNN service: {e}")
+                logger.info("Falling back to traditional ML model...")
+                detector = MalwareDetector()
+                logger.info(f"✓ Traditional ML model loaded ({detector.model_size_mb:.2f} MB)")
+        else:
+            # Initialize traditional ML detector
+            if USE_CNN_MODEL and CNNModelClient is None:
+                logger.warning("CNN client not available - using traditional model")
+            logger.info("Loading traditional ML model...")
+            detector = MalwareDetector()
+            logger.info(f"✓ Model loaded successfully ({detector.model_size_mb:.2f} MB)")
         
-        # Initialize VirusTotal enricher (optional)
-        logger.info("Initializing VirusTotal enricher...")
-        vt_enricher = VirusTotalEnricher()
-        logger.info("✓ VirusTotal enricher ready")
+        # Note: VT enrichment is now handled by model_service in staged analysis
+        # Only initialize local VT enricher if using traditional ML model
+        if detector and not cnn_detector:
+            logger.info("Initializing VirusTotal enricher...")
+            try:
+                vt_enricher = VirusTotalEnricher()
+                logger.info("✓ VirusTotal enricher ready")
+            except Exception as e:
+                logger.warning(f"VT enricher not available: {e}")
         
         logger.info("✅ SecureGuard Backend ready!")
+        logger.info(f"   Model type: {'CNN' if cnn_detector else 'Traditional ML'}")
         
     except Exception as e:
         logger.error(f"❌ Startup failed: {e}")
@@ -104,11 +161,13 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    active_detector = cnn_detector or detector
     return {
         "status": "healthy",
-        "model_loaded": detector is not None,
+        "model_loaded": active_detector is not None,
+        "model_type": "CNN" if cnn_detector else "Traditional ML",
         "model_accuracy": detector.model_accuracy if detector else None,
-        "vt_available": vt_enricher is not None and vt_enricher.is_configured()
+        "vt_available": vt_enricher is not None
     }
 
 
@@ -123,7 +182,10 @@ async def scan_file(request: ScanRequest):
     Returns:
         ScanResponse with detection results
     """
-    if not detector:
+    # Use CNN model if available, otherwise fall back to traditional
+    active_detector = cnn_detector or detector
+    
+    if not active_detector:
         raise HTTPException(status_code=503, detail="ML model not loaded")
     
     try:
@@ -133,21 +195,29 @@ async def scan_file(request: ScanRequest):
         
         logger.info(f"Scanning file: {request.file_path}")
         
-        # Perform local ML scan
-        result = detector.scan_file(request.file_path)
+        # Perform ML scan
+        # For CNN: uses staged analysis (PE static + VT enrichment if uncertain)
+        # For traditional ML: uses local model only
+        result = active_detector.scan_file(request.file_path)
         
-        # Enrich with VirusTotal if malicious and enabled
-        vt_data = None
-        if result['is_malicious'] and request.enable_vt and vt_enricher:
+        # VT data is already included in result for CNN staged analysis
+        vt_data = result.get('vt_detection_ratio') if cnn_detector else None
+        
+        # For traditional ML, optionally enrich with VirusTotal
+        if detector and result['is_malicious'] and request.enable_vt and vt_enricher:
             logger.info("File flagged as malicious - enriching with VirusTotal...")
-            vt_data = vt_enricher.check_file(request.file_path)
+            vt_enrichment = vt_enricher.check_file(request.file_path)
+            vt_data = vt_enrichment.get('detection') if vt_enrichment else None
+        
+        # Get features count (different for CNN vs traditional)
+        features_count = result.get('file_size', 0) if cnn_detector else result.get('features_count', 0)
         
         response = ScanResponse(
             is_malicious=result['is_malicious'],
             confidence=result['confidence'],
-            prediction_label=result['label'],
+            prediction_label=result['prediction_label'],
             scan_time_ms=result['scan_time_ms'],
-            features_analyzed=result['features_count'],
+            features_analyzed=features_count,
             vt_data=vt_data
         )
         
@@ -171,7 +241,10 @@ async def scan_uploaded_file(file: UploadFile = File(...), enable_vt: bool = Tru
     Returns:
         ScanResponse with detection results
     """
-    if not detector:
+    # Use CNN model if available, otherwise fall back to traditional
+    active_detector = cnn_detector or detector
+    
+    if not active_detector:
         raise HTTPException(status_code=503, detail="ML model not loaded")
     
     temp_path = None
@@ -190,24 +263,32 @@ async def scan_uploaded_file(file: UploadFile = File(...), enable_vt: bool = Tru
         logger.info(f"Scanning uploaded file: {file.filename} ({len(content)} bytes)")
         
         # Perform scan
-        result = detector.scan_file(str(temp_path))
+        # For CNN: uses staged analysis (PE static + VT enrichment if uncertain)
+        # For traditional ML: uses local model only
+        result = active_detector.scan_file(str(temp_path))
         
-        # Enrich with VirusTotal if malicious
-        vt_data = None
-        if result['is_malicious'] and enable_vt and vt_enricher:
+        # VT data is already included in result for CNN staged analysis
+        vt_data = result.get('vt_detection_ratio') if cnn_detector else None
+        
+        # For traditional ML, optionally enrich with VirusTotal
+        if detector and result['is_malicious'] and enable_vt and vt_enricher:
             logger.info("File flagged as malicious - enriching with VirusTotal...")
-            vt_data = vt_enricher.check_file(str(temp_path))
+            vt_enrichment = vt_enricher.check_file(str(temp_path))
+            vt_data = vt_enrichment.get('detection') if vt_enrichment else None
         
         # Clean up temp file
         if temp_path and temp_path.exists():
             temp_path.unlink()
+        
+        # Get features count (different for CNN vs traditional)
+        features_count = result.get('file_size', 0) if cnn_detector else result.get('features_count', 0)
         
         response = ScanResponse(
             is_malicious=result['is_malicious'],
             confidence=result['confidence'],
             prediction_label=result['prediction_label'],
             scan_time_ms=result['scan_time_ms'],
-            features_analyzed=result['features_count'],
+            features_analyzed=features_count,
             vt_data=vt_data
         )
         
@@ -225,10 +306,12 @@ async def scan_uploaded_file(file: UploadFile = File(...), enable_vt: bool = Tru
 @app.get("/stats")
 async def get_statistics():
     """Get model statistics and performance metrics"""
-    if not detector:
+    active_detector = cnn_detector or detector
+    
+    if not active_detector:
         raise HTTPException(status_code=503, detail="ML model not loaded")
     
-    return detector.get_stats()
+    return active_detector.get_stats()
 
 
 if __name__ == "__main__":
@@ -237,6 +320,6 @@ if __name__ == "__main__":
         "main:app",
         host="127.0.0.1",
         port=8000,
-        reload=True,
+        reload=False,  # Disabled to reduce log noise - manually restart after code changes
         log_level="info"
     )

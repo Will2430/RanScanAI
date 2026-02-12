@@ -1,0 +1,164 @@
+{
+  "target": "C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe",
+  "start_time": "2026-02-11T18:02:22.182457",
+  "registry": {
+    "read": 0,
+    "write": 0,
+    "delete": 0,
+    "keys_modified": []
+  },
+  "network": {
+    "dns": 0,
+    "http": 0,
+    "connections": 0,
+    "domains": []
+  },
+  "processes": {
+    "created": [
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      },
+      {
+        "name": "tmphtzpzzjg.tmp",
+        "pid": 6188,
+        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
+      }
+    ],
+    "total": 2,
+    "suspicious": 0,
+    "malicious": 0
+  },
+  "files": {
+    "created": [],
+    "modified": [],
+    "deleted": [],
+    "encrypted": [],
+    "suspicious": 0,
+    "malicious": 0
+  },
+  "dlls": [
+    "ntdll.dll",
+    "netmsg.dll",
+    "uxtheme.dll",
+    "apphelp.dll",
+    "imm32.dll",
+    "rpcrt4.dll",
+    "combase.dll",
+    "advapi32.dll",
+    "msctf.dll",
+    "ucrtbase.dll",
+    "win32u.dll",
+    "shell32.dll",
+    "bcrypt.dll",
+    "msvcrt.dll",
+    "user32.dll",
+    "sechost.dll",
+    "kernel32.dll",
+    "msvcp_win.dll",
+    "oleaut32.dll",
+    "gdi32full.dll",
+    "KernelBase.dll",
+    "comctl32.dll",
+    "gdi32.dll",
+    "wow64cpu.dll",
+    "wow64win.dll",
+    "wow64.dll"
+  ],
+  "apis": 0,
+  "execution_time": 10.2034752368927,
+  "end_time": "2026-02-11T18:02:33.254834",
+  "summary": {
+    "registry_total": 0,
+    "files_total": 0,
+    "network_total": 0,
+    "dlls_count": 26,
+    "suspicious_activity": false
+  }
+}
