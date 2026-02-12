@@ -1,4 +1,4 @@
-# 🛡️ SecureGuard Browser Extension
+# 🛡️ RanScanAI Browser Extension
 
 **Privacy-First Malware Scanner - Right in Your Browser**
 
