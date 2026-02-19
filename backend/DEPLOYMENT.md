@@ -4,17 +4,24 @@ Universal deployment configuration for RanScanAI backend. Works with **Railway**
 
 ## 📁 Files Included
 
+**In `backend/` folder:**
 - **`Dockerfile`** - Container configuration (works everywhere)
 - **`.dockerignore`** - Excludes unnecessary files from Docker builds
 - **`Procfile`** - Fallback for platforms that don't use Docker by default
 - **`runtime.txt`** - Python version specification
 - **`.env.example`** - Environment variables template
 
+**In repo root:**
+- **`railway.json`** - Railway configuration (tells it to build from backend/ subfolder)
+
 ---
 
 ## 🌐 Quick Deploy Options
 
 ### Option 1: Railway (Easiest)
+
+**Important:** Railway needs `railway.json` at repo root to find the backend folder.
+
 ```bash
 # 1. Install Railway CLI
 npm i -g @railway/cli
@@ -22,17 +29,23 @@ npm i -g @railway/cli
 # 2. Login
 railway login
 
-# 3. Initialize from backend directory
-cd backend
+# 3. Initialize from REPO ROOT (not backend folder)
 railway init
 
 # 4. Set environment variables
 railway variables set DATABASE_URL=your_database_url
 railway variables set VIRUSTOTAL_API_KEY=your_key
 
-# 5. Deploy
+# 5. Deploy (Railway will use railway.json config)
 railway up
 ```
+
+**Or via Dashboard:**
+1. Go to [railway.app](https://railway.app) → New Project
+2. Deploy from GitHub repo → Select RanScanAI
+3. Railway auto-detects `railway.json` and builds from `backend/`
+4. Add environment variables in Variables tab
+5. Deploy!
 
 ### Option 2: Render
 ```bash
@@ -215,6 +228,11 @@ All platforms support health checks. Endpoint: `/health`
 ---
 
 ## 🐛 Troubleshooting
+
+### Railway: "Script start.sh not found" or "could not determine how to build"
+- **Fix:** Ensure `railway.json` exists at repo root (not in backend folder)
+- Railway needs this file to locate backend subfolder
+- Redeploy after adding the file
 
 ### Build fails with "No module named..."
 - Check `requirements.txt` includes all dependencies

@@ -29,6 +29,7 @@ dataset/Sensors*
 
 # Allowlisted files
 !requirements_backup.txt
+!railway.json
 
 # Exclude a Windows path that fails indexing
 testing_code/vm_related/VM_Testing_Package_20260210_020538/ransomware_simulator.py
