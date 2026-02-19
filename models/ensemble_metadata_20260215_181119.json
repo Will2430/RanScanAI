@@ -1,0 +1,22 @@
+{
+  "model_type": "VotingClassifier",
+  "voting_method": "soft",
+  "timestamp": "20260215_181119",
+  "n_estimators": 3,
+  "estimators": {
+    "random_forest": {
+      "path": "random_forest_zenodo_20260214_235613.pkl",
+      "type": "RandomForestClassifier"
+    },
+    "gradient_boosting": {
+      "path": "gradient_boosting_zenodo_20260210_171423.pkl",
+      "type": "GradientBoostingClassifier"
+    },
+    "xgboost": {
+      "path": "xgboost_zenodo_20260214_233409.pkl",
+      "type": "XGBClassifier"
+    }
+  },
+  "weights": "equal",
+  "scaler": "scaler_xgb_20260214_233409.pkl"
+}

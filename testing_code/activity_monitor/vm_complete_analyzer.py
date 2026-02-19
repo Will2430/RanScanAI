@@ -1,0 +1,846 @@
+"""
+Complete Behavioral Analyzer - Real Sandbox Approach
+Directly executes malware and monitors its runtime behavior in real-time
+
+USAGE (inside Azure VM):
+    python vm_complete_analyzer.py System_Update.exe
+
+OUTPUT:
+    - complete_analysis.json (full behavioral analysis + risk scoring)
+
+This analyzer:
+1. Takes filesystem/registry snapshots BEFORE execution
+2. EXECUTES the malware directly
+3. Monitors behavior in real-time (psutil: process tree, network, DLLs)
+4. Runs Frida API tracer to capture sequential API calls (optional)
+5. Analyzes changes AFTER execution
+6. Detects ransomware patterns (including API sequences)
+7. Generates risk score + ML features
+
+Requirements:
+    pip install psutil pywin32 frida (optional)
+"""
+
+import os
+import sys
+import json
+import time
+import subprocess
+import winreg
+import psutil
+from pathlib import Path
+from datetime import datetime
+from collections import defaultdict
+
+# Fix Windows console encoding issues with emojis
+import io
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+
+class CompleteAnalyzer:
+    """
+    Real sandbox analyzer - executes malware and monitors runtime behavior
+    """
+    
+    def __init__(self, target_path: str, watch_dir: str = None):
+        self.target_path = Path(target_path).resolve()  # Convert to absolute path
+        self.watch_dir = Path(watch_dir) if watch_dir else Path("C:/Users/willi/Downloads/RANSOMWARE_TEST_FOLDER")
+        self.results_dir = Path(__file__).parent / "analysis_results"
+        self.results_dir.mkdir(exist_ok=True)
+        
+        # Behavioral data
+        self.analysis = {
+            'target': str(self.target_path),
+            'timestamp': datetime.now().isoformat(),
+            'snapshots': {
+                'files_before': set(),
+                'files_after': set(),
+                'registry_before': {},
+                'registry_after': {}
+            },
+            'runtime_data': {
+                'process_tree': [],
+                'network_connections': [],
+                'dlls_loaded': [],
+                'execution_time': 0.0
+            },
+            'api_sequence': [],
+            'behavioral_changes': {},
+            'patterns': {},
+            'ml_features': {},
+            'risk_score': 0.0
+        }
+    
+    def take_filesystem_snapshot(self):
+        """Take snapshot of files before execution"""
+        print(f"\n📸 Taking filesystem snapshot: {self.watch_dir}")
+        
+        if not self.watch_dir.exists():
+            print(f"   Creating watch directory...")
+            self.watch_dir.mkdir(parents=True, exist_ok=True)
+        
+        files_before = set()
+        for file in self.watch_dir.rglob('*'):
+            if file.is_file():
+                files_before.add(str(file))
+        
+        self.analysis['snapshots']['files_before'] = list(files_before)
+        print(f"   ✓ {len(files_before)} files catalogued")
+        return files_before
+    
+    def take_registry_snapshot(self):
+        """Take snapshot of registry before execution"""
+        print(f"\n📸 Taking registry snapshot...")
+        
+        # Monitor common ransomware persistence keys
+        keys_to_monitor = [
+            (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run"),
+            (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
+            (winreg.HKEY_CURRENT_USER, r"Software\TestRansomware"),
+        ]
+        
+        registry_before = {}
+        for hive, subkey_path in keys_to_monitor:
+            try:
+                key = winreg.OpenKey(hive, subkey_path, 0, winreg.KEY_READ)
+                values = {}
+                i = 0
+                while True:
+                    try:
+                        name, data, type_ = winreg.EnumValue(key, i)
+                        values[name] = (data, type_)
+                        i += 1
+                    except OSError:
+                        break
+                registry_before[subkey_path] = values
+                winreg.CloseKey(key)
+            except FileNotFoundError:
+                registry_before[subkey_path] = {}
+            except Exception:
+                pass
+        
+        self.analysis['snapshots']['registry_before'] = registry_before
+        print(f"   ✓ {len(registry_before)} registry keys monitored")
+        return registry_before
+    
+    def execute_and_monitor(self, timeout: int = 90):
+        """Execute malware and monitor its behavior in real-time"""
+        print(f"\n🚀 Executing malware: {self.target_path.name}")
+        print(f"   Execution timeout: {timeout} seconds")
+        print(f"   ⚠️  MONITORING STARTED - Malware is now running!")
+        
+        start_time = time.time()
+        
+        try:
+            # Spawn the process
+            if str(self.target_path).endswith('.py'):
+                # Python script - use absolute path and set working directory
+                process = psutil.Popen(
+                    [sys.executable, str(self.target_path), '--auto-run'],
+                    cwd=str(self.target_path.parent),  # Set working directory to script's folder
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+            else:
+                # Executable
+                process = psutil.Popen(
+                    [str(self.target_path), '--auto-run'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+            
+            malware_pid = process.pid
+            print(f"   ✓ Process spawned (PID: {malware_pid})")
+            
+            # Monitor in real-time
+            monitored_process = psutil.Process(malware_pid)
+            process_tree = []
+            network_connections = []
+            dlls_loaded = set()
+            
+            # Monitor for specified timeout
+            elapsed = 0
+            last_progress_print = 0
+            while elapsed < timeout:
+                try:
+                    if not monitored_process.is_running():
+                        print(f"   ✓ Process terminated naturally after {elapsed:.1f}s")
+                        break
+                    
+                    # Print progress every 10 seconds
+                    if elapsed - last_progress_print >= 10:
+                        print(f"   ... monitoring ({elapsed:.0f}s elapsed, {len(process_tree)} child procs, {len(network_connections)} net conns)")
+                        last_progress_print = elapsed
+                    
+                    # Capture child processes
+                    try:
+                        children = monitored_process.children(recursive=True)
+                        for child in children:
+                            child_info = {
+                                'name': child.name(),
+                                'pid': child.pid,
+                                'cmdline': ' '.join(child.cmdline()) if child.cmdline() else '',
+                                'timestamp': elapsed
+                            }
+                            if child_info not in process_tree:
+                                process_tree.append(child_info)
+                                print(f"   [PROCESS] Spawned: {child.name()} (PID {child.pid})")
+                    except:
+                        pass
+                    
+                    # Capture network connections
+                    try:
+                        connections = monitored_process.net_connections()
+                        for conn in connections:
+                            # Capture all connection types (DNS lookups, TCP, UDP, etc.)
+                            conn_info = {
+                                'remote_ip': conn.raddr.ip if conn.raddr else None,
+                                'remote_port': conn.raddr.port if conn.raddr else None,
+                                'status': conn.status,
+                                'type': conn.type.name if hasattr(conn.type, 'name') else str(conn.type),
+                                'timestamp': elapsed
+                            }
+                            if conn_info not in network_connections:
+                                network_connections.append(conn_info)
+                                if conn_info['remote_ip']:
+                                    print(f"   [NETWORK] {conn.status}: {conn_info['remote_ip']}:{conn_info['remote_port']}")
+                    except:
+                        pass
+                    
+                    # Capture loaded DLLs
+                    try:
+                        for module in monitored_process.memory_maps():
+                            if module.path and module.path.lower().endswith('.dll'):
+                                dll_name = Path(module.path).name
+                                if dll_name not in dlls_loaded:
+                                    dlls_loaded.add(dll_name)
+                    except:
+                        pass
+                    
+                    time.sleep(0.2)  # Faster polling to catch transient activity
+                    elapsed = time.time() - start_time
+                
+                except psutil.NoSuchProcess:
+                    print(f"   ✓ Process terminated after {elapsed:.1f}s")
+                    break
+            
+            # Terminate if still running
+            try:
+                if monitored_process.is_running():
+                    print(f"   ⏱️  Timeout reached - terminating process...")
+                    monitored_process.terminate()
+                    monitored_process.wait(timeout=5)
+            except psutil.TimeoutExpired:
+                print(f"   ⚠️  Forcing process termination...")
+                monitored_process.kill()
+            except psutil.NoSuchProcess:
+                pass
+            
+            # Capture output
+            try:
+                stdout, stderr = process.communicate(timeout=2)
+                return_code = process.returncode
+                
+                if return_code != 0:
+                    print(f"\n   ⚠️  Process exited with code {return_code}")
+                
+                if stderr and stderr.strip():
+                    print(f"\n   ⚠️  Process stderr:")
+                    for line in stderr.strip().split('\n')[:20]:  # First 20 lines
+                        print(f"      {line}")
+            except subprocess.TimeoutExpired:
+                pass
+            except Exception as e:
+                print(f"   ⚠️  Could not capture output: {e}")
+            
+            execution_time = time.time() - start_time
+            
+            # Store runtime data
+            self.analysis['runtime_data'] = {
+                'process_tree': process_tree,
+                'network_connections': network_connections,
+                'dlls_loaded': list(dlls_loaded),
+                'execution_time': execution_time,
+                'main_pid': malware_pid
+            }
+            
+            print(f"\n   ✓ Execution complete")
+            print(f"   Duration: {execution_time:.2f}s")
+            print(f"   Child processes: {len(process_tree)}")
+            print(f"   Network connections: {len(network_connections)}")
+            print(f"   DLLs loaded: {len(dlls_loaded)}")
+            
+            return True
+        
+        except Exception as e:
+            print(f"\n   ❌ Error during execution: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def analyze_filesystem_changes(self):
+        """Analyze file changes after execution"""
+        print(f"\n📊 Analyzing filesystem changes...")
+        
+        files_after = set()
+        for file in self.watch_dir.rglob('*'):
+            if file.is_file():
+                files_after.add(str(file))
+        
+        self.analysis['snapshots']['files_after'] = list(files_after)
+        
+        files_before = set(self.analysis['snapshots']['files_before'])
+        
+        # Detect changes
+        files_created = files_after - files_before
+        files_deleted = files_before - files_after
+        files_encrypted = []
+        ransom_notes = []
+        
+        # Analyze created files
+        for file in files_created:
+            file_path = Path(file)
+            
+            # Check for encrypted files (suspicious extensions)
+            if any(ext in file_path.suffix.lower() for ext in ['.encrypted', '.locked', '.crypto', '.crypted', '.crypt']):
+                files_encrypted.append(file)
+            
+            # Check for ransom notes
+            if any(keyword in file_path.name.lower() for keyword in ['readme', 'decrypt', 'recover', 'ransom', 'help', 'instruction']):
+                ransom_notes.append(file)
+        
+        changes = {
+            'files_created': list(files_created),
+            'files_deleted': list(files_deleted),
+            'files_encrypted': files_encrypted,
+            'ransom_notes': ransom_notes,
+            'total_created': len(files_created),
+            'total_deleted': len(files_deleted),
+            'total_encrypted': len(files_encrypted),
+            'total_ransom_notes': len(ransom_notes)
+        }
+        
+        self.analysis['behavioral_changes']['filesystem'] = changes
+        
+        print(f"   Files created: {len(files_created)}")
+        print(f"   Files deleted: {len(files_deleted)}")
+        print(f"   Files encrypted: {len(files_encrypted)}")
+        print(f"   Ransom notes: {len(ransom_notes)}")
+        
+        return changes
+    
+    def analyze_registry_changes(self):
+        """Analyze registry changes after execution"""
+        print(f"\n📊 Analyzing registry changes...")
+        
+        keys_to_monitor = [
+            (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run"),
+            (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\RunOnce"),
+            (winreg.HKEY_CURRENT_USER, r"Software\TestRansomware"),
+        ]
+        
+        registry_after = {}
+        for hive, subkey_path in keys_to_monitor:
+            try:
+                key = winreg.OpenKey(hive, subkey_path, 0, winreg.KEY_READ)
+                values = {}
+                i = 0
+                while True:
+                    try:
+                        name, data, type_ = winreg.EnumValue(key, i)
+                        values[name] = (data, type_)
+                        i += 1
+                    except OSError:
+                        break
+                registry_after[subkey_path] = values
+                winreg.CloseKey(key)
+            except FileNotFoundError:
+                registry_after[subkey_path] = {}
+            except Exception:
+                pass
+        
+        self.analysis['snapshots']['registry_after'] = registry_after
+        
+        # Analyze changes
+        registry_before = self.analysis['snapshots']['registry_before']
+        writes = 0
+        deletes = 0
+        keys_modified = []
+        persistence_attempts = []
+        
+        for subkey_path in registry_before.keys():
+            before_values = registry_before.get(subkey_path, {})
+            after_values = registry_after.get(subkey_path, {})
+            
+            # New values (writes)
+            for name, (data, type_) in after_values.items():
+                if name not in before_values:
+                    writes += 1
+                    keys_modified.append(f"{subkey_path}\\{name}")
+                    
+                    # Check if it's a persistence attempt
+                    if 'Run' in subkey_path or 'Winlogon' in subkey_path:
+                        persistence_attempts.append(f"{subkey_path}\\{name}")
+                elif before_values[name] != (data, type_):
+                    writes += 1
+                    keys_modified.append(f"{subkey_path}\\{name} (modified)")
+            
+            # Deleted values
+            for name in before_values:
+                if name not in after_values:
+                    deletes += 1
+                    keys_modified.append(f"{subkey_path}\\{name} (deleted)")
+        
+        changes = {
+            'writes': writes,
+            'deletes': deletes,
+            'keys_modified': keys_modified,
+            'persistence_attempts': persistence_attempts
+        }
+        
+        self.analysis['behavioral_changes']['registry'] = changes
+        
+        print(f"   Registry writes: {writes}")
+        print(f"   Registry deletes: {deletes}")
+        print(f"   Persistence attempts: {len(persistence_attempts)}")
+        
+        return changes
+    
+    def detect_patterns(self):
+        """Detect ransomware patterns from behavioral changes"""
+        print(f"\n🔍 Detecting ransomware patterns...")
+        
+        patterns = {
+            'mass_file_encryption': False,
+            'shadow_copy_deletion': False,
+            'registry_persistence': False,
+            'network_c2_communication': False,
+            'ransom_note_creation': False,
+            'mass_file_deletion': False,
+            'suspicious_process_creation': False,
+            'api_encrypt_rename_sequence': False
+        }
+        
+        fs_changes = self.analysis['behavioral_changes'].get('filesystem', {})
+        reg_changes = self.analysis['behavioral_changes'].get('registry', {})
+        runtime = self.analysis['runtime_data']
+        api_seq = self.analysis.get('api_sequence', [])
+        
+        # Pattern 1: Mass file encryption
+        if fs_changes.get('total_encrypted', 0) > 50:
+            patterns['mass_file_encryption'] = True
+            print(f"   ✅ Mass file encryption detected ({fs_changes['total_encrypted']} files)")
+        
+        # Pattern 2: Ransom note creation
+        if fs_changes.get('total_ransom_notes', 0) > 0:
+            patterns['ransom_note_creation'] = True
+            print(f"   ✅ Ransom note creation detected ({fs_changes['total_ransom_notes']} notes)")
+        
+        # Pattern 3: Mass file deletion
+        if fs_changes.get('total_deleted', 0) > 30:
+            patterns['mass_file_deletion'] = True
+            print(f"   ✅ Mass file deletion detected ({fs_changes['total_deleted']} files)")
+        
+        # Pattern 4: Registry persistence
+        if len(reg_changes.get('persistence_attempts', [])) > 0:
+            patterns['registry_persistence'] = True
+            print(f"   ✅ Registry persistence detected ({len(reg_changes['persistence_attempts'])} attempts)")
+        
+        # Pattern 5: Network C2 communication
+        if len(runtime.get('network_connections', [])) > 5:
+            patterns['network_c2_communication'] = True
+            print(f"   ✅ Network C2 detected ({len(runtime['network_connections'])} connections)")
+        
+        # Pattern 6: Suspicious process creation
+        if len(runtime.get('process_tree', [])) > 0:
+            patterns['suspicious_process_creation'] = True
+            print(f"   ✅ Process spawning detected ({len(runtime['process_tree'])} processes)")
+        
+        # Pattern 7: API Encrypt-Rename sequence (from Frida API trace)
+        if api_seq:
+            for i in range(len(api_seq) - 2):
+                call1 = api_seq[i]
+                call2 = api_seq[i+1] if i+1 < len(api_seq) else {}
+                call3 = api_seq[i+2] if i+2 < len(api_seq) else {}
+                
+                api1 = call1.get('api', '')
+                api2 = call2.get('api', '')
+                api3 = call3.get('api', '')
+                
+                # Look for: Write → Write → Rename/MoveFile pattern
+                if 'Write' in api1 and 'Write' in api2 and ('Rename' in api3 or 'Move' in api3):
+                    # Check if renamed to suspicious extension
+                    args3 = str(call3.get('args', {}))
+                    if any(ext in args3.lower() for ext in ['.encrypted', '.locked', '.crypto', '.crypt']):
+                        patterns['api_encrypt_rename_sequence'] = True
+                        print(f"   ✅ API encrypt-rename sequence detected (API trace)")
+                        break
+        
+        self.analysis['patterns'] = patterns
+        
+        detected_count = sum(patterns.values())
+        print(f"\n   Total patterns detected: {detected_count}/{len(patterns)}")
+        
+        return patterns
+    
+    def run_api_tracer(self):
+        """Run Frida-based API call sequencing (subprocess approach)"""
+        print(f"\n🔍 Running API tracer (Frida)...")
+        
+        # Check if Frida is available
+        try:
+            import frida
+            print(f"   ✓ Frida detected")
+        except ImportError:
+            print("   ⚠️  Frida not installed - skipping API tracing")
+            print("      Install with: pip install frida frida-tools")
+            return None
+        
+        # Check if vm_api_tracer.py exists
+        tracer_script = Path(__file__).parent / "vm_api_tracer_ntdll.py"
+        if not tracer_script.exists():
+            print("   ⚠️  vm_api_tracer.py not found - skipping API tracing")
+            return None
+        
+        # Run API tracer
+        print(f"   Target: {self.target_path}")
+        try:
+            result = subprocess.run(
+                [sys.executable, str(tracer_script), str(self.target_path)],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=120
+            )
+            
+            if result.returncode == 0:
+                print("   ✅ API tracing complete")
+                
+                # Load api_trace_ntdll.json (NT-level tracer output)
+                api_json = Path("api_trace_ntdll.json")
+                if api_json.exists():
+                    with open(api_json, 'r') as f:
+                        api_data = json.load(f)
+                        self.analysis['api_sequence'] = api_data.get('api_sequence', [])
+                    
+                    print(f"   Captured {len(self.analysis['api_sequence'])} API calls")
+                    return self.analysis['api_sequence']
+                else:
+                    print(f"   ⚠️  Output file not found: {api_json}")
+            else:
+                print(f"   ⚠️  API tracer returned code {result.returncode}")
+                if result.stderr:
+                    print(f"      Error: {result.stderr[:200]}")
+        
+        except subprocess.TimeoutExpired:
+            print("   ⚠️  API tracer timed out (max 120s)")
+        except Exception as e:
+            print(f"   ⚠️  Error running API tracer: {e}")
+        
+        return None
+    
+    def extract_ml_features(self):
+        """Extract ML-ready features from runtime data and behavioral changes"""
+        print(f"\n📊 Extracting ML features...")
+        
+        fs_changes = self.analysis['behavioral_changes'].get('filesystem', {})
+        reg_changes = self.analysis['behavioral_changes'].get('registry', {})
+        runtime = self.analysis['runtime_data']
+        patterns = self.analysis['patterns']
+        api_seq = self.analysis.get('api_sequence', [])
+        
+        features = {
+            # File operation features
+            'file_created_count': fs_changes.get('total_created', 0),
+            'file_deleted_count': fs_changes.get('total_deleted', 0),
+            'file_encrypted_count': fs_changes.get('total_encrypted', 0),
+            'ransom_note_count': fs_changes.get('total_ransom_notes', 0),
+            
+            # Registry operation features
+            'registry_write_count': reg_changes.get('writes', 0),
+            'registry_delete_count': reg_changes.get('deletes', 0),
+            'persistence_attempt_count': len(reg_changes.get('persistence_attempts', [])),
+            
+            # Runtime features
+            'process_spawn_count': len(runtime.get('process_tree', [])),
+            'network_connection_count': len(runtime.get('network_connections', [])),
+            'dll_load_count': len(runtime.get('dlls_loaded', [])),
+            'execution_time': runtime.get('execution_time', 0.0),
+            
+            # API sequence features (from Frida trace)
+            'api_sequence_length': len(api_seq),
+            'api_file_operations': len([c for c in api_seq if 'File' in str(c.get('api', ''))]),
+            'api_registry_operations': len([c for c in api_seq if 'Reg' in str(c.get('api', ''))]),
+            'api_crypto_operations': len([c for c in api_seq if 'Crypt' in str(c.get('api', ''))]),
+            'api_network_operations': len([c for c in api_seq if any(x in str(c.get('api', '')) for x in ['connect', 'send', 'socket'])]),
+            
+            # Pattern-based binary features
+            'has_mass_encryption': int(patterns.get('mass_file_encryption', False)),
+            'has_shadow_copy_deletion': int(patterns.get('shadow_copy_deletion', False)),
+            'has_registry_persistence': int(patterns.get('registry_persistence', False)),
+            'has_network_c2': int(patterns.get('network_c2_communication', False)),
+            'has_ransom_note': int(patterns.get('ransom_note_creation', False)),
+            'has_mass_deletion': int(patterns.get('mass_file_deletion', False)),
+            'has_suspicious_process': int(patterns.get('suspicious_process_creation', False)),
+            'has_api_encrypt_rename': int(patterns.get('api_encrypt_rename_sequence', False)),
+            
+            # Derived features
+            'file_delete_ratio': (
+                fs_changes.get('total_deleted', 0) / max(fs_changes.get('total_created', 0), 1)
+            ),
+            'encryption_ratio': (
+                fs_changes.get('total_encrypted', 0) / max(fs_changes.get('total_created', 0), 1)
+            ),
+            'pattern_detection_count': sum(patterns.values())
+        }
+        
+        self.analysis['ml_features'] = features
+        
+        print(f"   Extracted {len(features)} ML features")
+        print(f"   Pattern detection count: {features['pattern_detection_count']}")
+        if api_seq:
+            print(f"   API sequence length: {len(api_seq)}")
+        
+        return features
+    
+    def calculate_risk_score(self):
+        """Calculate overall risk score (0-100)"""
+        print(f"\n🎯 Calculating risk score...")
+        
+        patterns = self.analysis['patterns']
+        features = self.analysis['ml_features']
+        
+        score = 0
+        reasons = []
+        
+        # Pattern-based scoring (70 points max)
+        if patterns.get('mass_file_encryption'):
+            score += 30
+            reasons.append("+30: Mass file encryption detected")
+        
+        if patterns.get('ransom_note_creation'):
+            score += 20
+            reasons.append("+20: Ransom note creation")
+        
+        if patterns.get('mass_file_deletion'):
+            score += 10
+            reasons.append("+10: Mass file deletion")
+        
+        if patterns.get('registry_persistence'):
+            score += 5
+            reasons.append("+5: Registry persistence")
+        
+        if patterns.get('network_c2_communication'):
+            score += 5
+            reasons.append("+5: Network C2 communication")
+        
+        if patterns.get('api_encrypt_rename_sequence'):
+            score += 5
+            reasons.append("+5: API encrypt-rename sequence detected")
+        
+        # Feature-based scoring (30 points max)
+        if features.get('file_encrypted_count', 0) > 100:
+            score += 10
+            reasons.append("+10: >100 files encrypted")
+        elif features.get('file_encrypted_count', 0) > 50:
+            score += 5
+            reasons.append("+5: >50 files encrypted")
+        
+        if features.get('registry_write_count', 0) > 50:
+            score += 10
+            reasons.append("+10: >50 registry writes")
+        elif features.get('registry_write_count', 0) > 20:
+            score += 5
+            reasons.append("+5: >20 registry writes")
+        
+        if features.get('network_connection_count', 0) > 10:
+            score += 5
+            reasons.append("+5: >10 network connections")
+        
+        if features.get('process_spawn_count', 0) > 0:
+            score += 5
+            reasons.append("+5: Spawned child processes")
+        
+        if features.get('api_crypto_operations', 0) > 0:
+            score += 5
+            reasons.append("+5: Crypto API operations detected")
+        
+        self.analysis['risk_score'] = min(score, 100)
+        
+        # Risk classification
+        if self.analysis['risk_score'] >= 70:
+            risk_level = "CRITICAL"
+            risk_desc = "Likely ransomware"
+        elif self.analysis['risk_score'] >= 50:
+            risk_level = "HIGH"
+            risk_desc = "Suspicious activity"
+        elif self.analysis['risk_score'] >= 30:
+            risk_level = "MEDIUM"
+            risk_desc = "Potentially malicious"
+        else:
+            risk_level = "LOW"
+            risk_desc = "Likely benign"
+        
+        self.analysis['risk_level'] = risk_level
+        self.analysis['risk_description'] = risk_desc
+        
+        print(f"\n🚨 Risk Score: {self.analysis['risk_score']}/100")
+        print(f"   Level: {risk_level} - {risk_desc}")
+        print(f"   Scoring breakdown:")
+        for reason in reasons:
+            print(f"      {reason}")
+        
+        return self.analysis['risk_score']
+    
+    def save_complete_analysis(self):
+        """Save complete analysis to JSON file"""
+        print(f"\n💾 Saving analysis...")
+        
+        output_file = self.results_dir / "complete_analysis.json"
+        
+        # Add metadata
+        self.analysis['metadata'] = {
+            'target_file': str(self.target_path),
+            'analysis_time': datetime.now().isoformat(),
+            'analyzer_version': '2.0',
+            'approach': 'real_sandbox_direct_execution'
+        }
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(self.analysis, f, indent=2, ensure_ascii=False)
+        
+        print(f"   ✅ Analysis saved to: {output_file}")
+        
+        return output_file
+
+
+def main():
+    """Main execution workflow"""
+    # Windows encoding fix
+    if sys.platform == 'win32':
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    
+    if len(sys.argv) < 2:
+        print("Usage: python vm_complete_analyzer.py <target.exe|target.py>")
+        print("\nExample:")
+        print("  python vm_complete_analyzer.py ..\\ransomware_simulation\\ransomware_simulator.py")
+        print("  python vm_complete_analyzer.py malicious_sample.exe")
+        sys.exit(1)
+    
+    target = sys.argv[1]
+    
+    print("="*80)
+    print("🔬 COMPLETE MALWARE ANALYZER - Real Sandbox Approach")
+    print("="*80)
+    print(f"\nTarget: {target}")
+    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    try:
+        # Initialize analyzer
+        analyzer = CompleteAnalyzer(target)
+        
+        # Phase 1: Take snapshots before execution
+        print("\n" + "="*80)
+        print("Phase 1: Taking Snapshots")
+        print("="*80)
+        analyzer.take_filesystem_snapshot()
+        analyzer.take_registry_snapshot()
+        
+        # Phase 2: Execute and monitor in real-time (WITH API tracing if available)
+        print("\n" + "="*80)
+        print("Phase 2: Execute and Monitor")
+        print("="*80)
+        
+        # Check if we should use API tracer for execution
+        use_api_tracer = False
+        try:
+            import frida
+            tracer_script = Path(__file__).parent / "vm_api_tracer_ntdll.py"
+            if tracer_script.exists():
+                use_api_tracer = True
+                print("✓ Frida detected - will use API tracer for execution")
+        except ImportError:
+            pass
+        
+        if use_api_tracer:
+            # Run API tracer (which will spawn and monitor the target)
+            print("\n🔍 Running with API tracing...")
+            analyzer.run_api_tracer()
+            
+            # Also capture basic metrics from the finished process
+            print("\n📊 Capturing post-execution metrics...")
+            # The process has finished, but we can still get behavioral changes
+        else:
+            # Fallback to basic monitoring
+            print("\n⚠️  API tracing not available, using basic monitoring...")
+            analyzer.execute_and_monitor(timeout=90)
+        
+        # Phase 3: Analyze behavioral changes
+        print("\n" + "="*80)
+        print("Phase 3: Analyzing Behavioral Changes")
+        print("="*80)
+        analyzer.analyze_filesystem_changes()
+        analyzer.analyze_registry_changes()
+        
+        # Phase 4: Detect ransomware patterns
+        print("\n" + "="*80)
+        print("Phase 4: Pattern Detection")
+        print("="*80)
+        analyzer.detect_patterns()
+        
+        # Phase 5: Extract ML features
+        print("\n" + "="*80)
+        print("Phase 5: ML Feature Extraction")
+        print("="*80)
+        analyzer.extract_ml_features()
+        
+        # Phase 6: Calculate risk score
+        print("\n" + "="*80)
+        print("Phase 6: Risk Scoring")
+        print("="*80)
+        analyzer.calculate_risk_score()
+        
+        # Save complete analysis
+        output_file = analyzer.save_complete_analysis()
+        
+        # Final summary
+        print("\n" + "="*80)
+        print("✅ ANALYSIS COMPLETE")
+        print("="*80)
+        
+        fs_changes = analyzer.analysis['behavioral_changes'].get('filesystem', {})
+        reg_changes = analyzer.analysis['behavioral_changes'].get('registry', {})
+        
+        print(f"\n📊 Summary...")
+        print(f"   Files created: {fs_changes.get('total_created', 0)}")
+        print(f"   Files encrypted: {fs_changes.get('total_encrypted', 0)}")
+        print(f"   Files deleted: {fs_changes.get('total_deleted', 0)}")
+        print(f"   Registry writes: {reg_changes.get('writes', 0)}")
+        print(f"   Network connections: {len(analyzer.analysis['runtime_data'].get('network_connections', []))}")
+        print(f"   API calls captured: {len(analyzer.analysis.get('api_sequence', []))}")
+        print(f"   Patterns detected: {sum(analyzer.analysis['patterns'].values())}/8")
+        print(f"   ML features extracted: {len(analyzer.analysis['ml_features'])}")
+        print(f"   Risk score: {analyzer.analysis['risk_score']}/100 ({analyzer.analysis['risk_level']})")
+        
+        print(f"\n📁 Output: {output_file}")
+        print(" Transfer this file to your backend API for ML-based detection")
+        print("="*80)
+    
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Analysis interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\n❌ Error during analysis: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

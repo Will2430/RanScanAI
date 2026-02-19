@@ -1,0 +1,32 @@
+MALICIOUS DETECTION TEST REPORT
+============================================================
+Generated: 2026-02-14T22:28:11.687803
+Executable: C:\Users\willi\OneDrive\Test\K\testing_code\ransomware_simulation\dist\System_Update.exe
+
+FILE INFORMATION:
+  File Size: 9,627,006 bytes
+  Created: 2026-02-11T17:53:31.014127
+
+BEHAVIORAL DATA:
+  Status: completed
+  Execution Time: 20.25s
+  Registry Reads: 6654
+  Registry Writes: 60
+  Network Connections: 1010
+  DNS Lookups: 1000
+  Files Created: 20
+  Files Encrypted: 500
+  Process Enumerations: 50
+
+TEST RESULTS:
+  See console output above for detailed results
+
+CONCLUSION:
+  The executable should be detected as MALICIOUS due to:
+     High volume of file operations (500+)
+     Extensive registry manipulation (2000+)
+     Suspicious network activity (1000+)
+     Ransomware-like behavioral patterns
+     PE characteristics matching malware
+
+============================================================

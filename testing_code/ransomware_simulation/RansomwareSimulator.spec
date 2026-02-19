@@ -3,10 +3,10 @@
 
 a = Analysis(
     ['C:\\Users\\willi\\OneDrive\\Test\\K\\Testing_Code\\ransomware_simulator.py'],
-    pathex=[],
+    pathex=['C:\\Users\\willi\\OneDrive\\Test\\K\\testing_code\\dynamic_path_config'],
     binaries=[],
     datas=[],
-    hiddenimports=[],
+    hiddenimports=['path_config'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

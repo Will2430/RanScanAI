@@ -1,0 +1,378 @@
+{
+  "timestamp": "2026-02-17T15:30:00.000000",
+  "total_calls": 2500,
+  "api_sequence": [
+    {
+      "timestamp": 0.001,
+      "api": "NtOpenProcess",
+      "args": {
+        "pid": 1234,
+        "access": "PROCESS_ALL_ACCESS"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.002,
+      "api": "NtAllocateVirtualMemory",
+      "args": {
+        "size": 8192,
+        "protection": "PAGE_EXECUTE_READWRITE"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.003,
+      "api": "NtWriteVirtualMemory",
+      "args": {
+        "address": "0x400000",
+        "size": 8192
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.004,
+      "api": "NtCreateThreadEx",
+      "args": {
+        "start_address": "0x400000"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.005,
+      "api": "NtQuerySystemInformation",
+      "args": {
+        "info_class": "SystemProcessInformation"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.006,
+      "api": "NtQueryInformationProcess",
+      "args": {
+        "info_class": "ProcessDebugPort"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.007,
+      "api": "NtSetInformationThread",
+      "args": {
+        "info_class": "ThreadHideFromDebugger"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.008,
+      "api": "NtOpenKey",
+      "args": {
+        "path": "\\Registry\\Machine\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.009,
+      "api": "NtSetValueKey",
+      "args": {
+        "value_name": "WindowsUpdate",
+        "data": "C:\\Windows\\Temp\\svchost.exe"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.010,
+      "api": "NtCreateUserProcess",
+      "args": {
+        "path": "C:\\Windows\\System32\\cmd.exe",
+        "command_line": "cmd.exe /c whoami & net user"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.011,
+      "api": "NtReadVirtualMemory",
+      "args": {
+        "address": "0x7FFE0000",
+        "size": 4096
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.012,
+      "api": "NtProtectVirtualMemory",
+      "args": {
+        "protection": "PAGE_EXECUTE_READWRITE"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.013,
+      "api": "NtDuplicateObject",
+      "args": {
+        "source_handle": "0x1234"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.014,
+      "api": "NtOpenProcess",
+      "args": {
+        "pid": 4567,
+        "access": "PROCESS_VM_WRITE"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.015,
+      "api": "NtWriteVirtualMemory",
+      "args": {
+        "address": "0x500000",
+        "size": 16384
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.016,
+      "api": "NtCreateThreadEx",
+      "args": {
+        "start_address": "0x500000"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.017,
+      "api": "NtQueryInformationProcess",
+      "args": {
+        "info_class": "ProcessBasicInformation"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.018,
+      "api": "NtOpenKey",
+      "args": {
+        "path": "\\Registry\\Machine\\System\\CurrentControlSet\\Services"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.019,
+      "api": "NtCreateKey",
+      "args": {
+        "path": "\\Registry\\Machine\\System\\CurrentControlSet\\Services\\MaliciousService"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.020,
+      "api": "NtSetValueKey",
+      "args": {
+        "value_name": "ImagePath",
+        "data": "C:\\Windows\\Temp\\malware.exe"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.021,
+      "api": "NtQuerySystemInformation",
+      "args": {
+        "info_class": "SystemModuleInformation"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.022,
+      "api": "NtOpenProcess",
+      "args": {
+        "pid": 789,
+        "access": "PROCESS_ALL_ACCESS"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.023,
+      "api": "NtSuspendProcess",
+      "args": {
+        "pid": 789
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.024,
+      "api": "NtWriteVirtualMemory",
+      "args": {
+        "address": "0x600000",
+        "size": 32768
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.025,
+      "api": "NtResumeProcess",
+      "args": {
+        "pid": 789
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.026,
+      "api": "NtQueryInformationThread",
+      "args": {
+        "info_class": "ThreadQuerySetWin32StartAddress"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.027,
+      "api": "NtOpenKey",
+      "args": {
+        "path": "\\Registry\\User\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.028,
+      "api": "NtQueryValueKey",
+      "args": {
+        "value_name": "Startup"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.029,
+      "api": "NtCreateFile",
+      "args": {
+        "path": "\\??\\C:\\Users\\User\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\malware.exe"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.030,
+      "api": "NtWriteFile",
+      "args": {
+        "size": 65536
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.031,
+      "api": "NtTerminateProcess",
+      "args": {
+        "pid": 9999,
+        "exit_code": 0
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.032,
+      "api": "NtQuerySystemInformation",
+      "args": {
+        "info_class": "SystemProcessInformation"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.033,
+      "api": "NtOpenProcess",
+      "args": {
+        "pid": 1111,
+        "access": "PROCESS_VM_READ"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.034,
+      "api": "NtReadVirtualMemory",
+      "args": {
+        "address": "0x700000",
+        "size": 8192
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.035,
+      "api": "LdrLoadDll",
+      "args": {
+        "dll_name": "ntdll.dll"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.036,
+      "api": "LdrGetProcedureAddress",
+      "args": {
+        "function_name": "NtQueryInformationProcess"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.037,
+      "api": "NtDelayExecution",
+      "args": {
+        "milliseconds": 10000
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.038,
+      "api": "NtQuerySystemTime",
+      "args": {},
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.039,
+      "api": "NtSetSystemTime",
+      "args": {
+        "time": "2025-01-01T00:00:00"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    },
+    {
+      "timestamp": 0.040,
+      "api": "NtUnmapViewOfSection",
+      "args": {
+        "address": "0x400000"
+      },
+      "return": "0x0",
+      "thread_id": 5000
+    }
+  ]
+}

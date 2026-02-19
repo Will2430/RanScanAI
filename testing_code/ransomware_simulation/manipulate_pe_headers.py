@@ -330,10 +330,10 @@ if __name__ == "__main__":
     
     try:
         test_script.write_text(test_code)
-        print(f"✓ Created test script: {test_script}")
+        print(f"Created test script: {test_script}")
         return test_script
     except Exception as e:
-        print(f"✗ Failed to create test script: {e}")
+        print(f"Failed to create test script: {e}")
         return None
 
 

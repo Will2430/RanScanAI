@@ -1,0 +1,195 @@
+{
+  "model_type": "RandomForestClassifier",
+  "timestamp": "20260214_235613",
+  "dataset": "C:\\Users\\willi\\OneDrive\\Test\\K\\dataset\\Zenedo.csv",
+  "n_samples": 21752,
+  "n_features": 67,
+  "feature_names": [
+    "EntryPoint",
+    "PEType",
+    "MachineType",
+    "magic_number",
+    "bytes_on_last_page",
+    "pages_in_file",
+    "relocations",
+    "size_of_header",
+    "min_extra_paragraphs",
+    "max_extra_paragraphs",
+    "init_ss_value",
+    "init_sp_value",
+    "init_ip_value",
+    "init_cs_value",
+    "over_lay_number",
+    "oem_identifier",
+    "address_of_ne_header",
+    "Magic",
+    "SizeOfCode",
+    "SizeOfInitializedData",
+    "SizeOfUninitializedData",
+    "AddressOfEntryPoint",
+    "BaseOfCode",
+    "BaseOfData",
+    "ImageBase",
+    "SectionAlignment",
+    "FileAlignment",
+    "OperatingSystemVersion",
+    "ImageVersion",
+    "SizeOfImage",
+    "SizeOfHeaders",
+    "Checksum",
+    "Subsystem",
+    "DllCharacteristics",
+    "SizeofStackReserve",
+    "SizeofStackCommit",
+    "SizeofHeapCommit",
+    "SizeofHeapReserve",
+    "LoaderFlags",
+    "text_VirtualSize",
+    "text_VirtualAddress",
+    "text_SizeOfRawData",
+    "text_PointerToRawData",
+    "text_PointerToRelocations",
+    "text_PointerToLineNumbers",
+    "text_Characteristics",
+    "rdata_VirtualSize",
+    "rdata_VirtualAddress",
+    "rdata_SizeOfRawData",
+    "rdata_PointerToRawData",
+    "rdata_PointerToRelocations",
+    "rdata_PointerToLineNumbers",
+    "rdata_Characteristics",
+    "registry_read",
+    "registry_write",
+    "registry_delete",
+    "registry_total",
+    "network_threats",
+    "network_dns",
+    "network_http",
+    "network_connections",
+    "processes_monitored",
+    "total_procsses",
+    "files_text",
+    "files_unknown",
+    "dlls_calls",
+    "apis"
+  ],
+  "leaked_features_removed": [
+    "md5",
+    "sha1",
+    "Family",
+    "Category",
+    "file_extension",
+    "processes_malicious",
+    "processes_suspicious",
+    "files_malicious",
+    "files_suspicious"
+  ],
+  "training_samples": 17401,
+  "test_samples": 4351,
+  "performance": {
+    "accuracy": 0.9692024821880028,
+    "roc_auc": 0.9954477265043948,
+    "cv_mean": 0.9632205371028935,
+    "cv_std": 0.002232711405709102
+  },
+  "hyperparameters": {
+    "n_estimators": 100,
+    "max_depth": 15,
+    "min_samples_split": 10,
+    "min_samples_leaf": 5,
+    "random_state": 42
+  },
+  "training_time_seconds": 0.383604,
+  "confusion_matrix": [
+    [
+      2084,
+      92
+    ],
+    [
+      42,
+      2133
+    ]
+  ],
+  "feature_importance": [
+    {
+      "feature": "processes_monitored",
+      "importance": 0.13784111034894203
+    },
+    {
+      "feature": "registry_total",
+      "importance": 0.13665355311614502
+    },
+    {
+      "feature": "network_dns",
+      "importance": 0.08200213391579404
+    },
+    {
+      "feature": "files_unknown",
+      "importance": 0.07982716687459046
+    },
+    {
+      "feature": "registry_read",
+      "importance": 0.07837127188972219
+    },
+    {
+      "feature": "total_procsses",
+      "importance": 0.04455369808923558
+    },
+    {
+      "feature": "files_text",
+      "importance": 0.04418603829064675
+    },
+    {
+      "feature": "Subsystem",
+      "importance": 0.04353748303128781
+    },
+    {
+      "feature": "network_http",
+      "importance": 0.042470726317896945
+    },
+    {
+      "feature": "registry_write",
+      "importance": 0.039159112808339204
+    },
+    {
+      "feature": "network_connections",
+      "importance": 0.021417925552542367
+    },
+    {
+      "feature": "DllCharacteristics",
+      "importance": 0.0198759389958602
+    },
+    {
+      "feature": "AddressOfEntryPoint",
+      "importance": 0.01656250059089355
+    },
+    {
+      "feature": "rdata_VirtualAddress",
+      "importance": 0.015431588195765683
+    },
+    {
+      "feature": "address_of_ne_header",
+      "importance": 0.01319084415213221
+    },
+    {
+      "feature": "EntryPoint",
+      "importance": 0.01303342085533232
+    },
+    {
+      "feature": "PEType",
+      "importance": 0.012943992757015889
+    },
+    {
+      "feature": "apis",
+      "importance": 0.012883988699789782
+    },
+    {
+      "feature": "rdata_VirtualSize",
+      "importance": 0.010097854414316706
+    },
+    {
+      "feature": "rdata_SizeOfRawData",
+      "importance": 0.010058378170757986
+    }
+  ]
+}

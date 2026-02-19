@@ -1,87 +1,50 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+# Ignore everything by default (allowlist below)
+*
 
-# Virtual Environment
-venv/
-ENV/
-env/
-.venv
+# Always keep the ignore file itself
+!.gitignore
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
+# Exclude large dataset files (GitHub has 100MB limit)
+dataset/**/*.csv
+dataset/archive/
+dataset/Sensors*
 
-# Logs
-*.log
-logs/
-temp_scans/
+# Allowlisted folders
+!.vscode/
+!.vscode/**
+!backend/
+!backend/**
+!browser-extension/
+!browser-extension/**
+!db-init/
+!db-init/**
+!htmls/
+!htmls/**
+!native-host/
+!native-host/**
+!testing_code/
+!testing_code/**
+!models/
+!models/**
 
-# API Keys & Credentials
-Credentials
-.env
-*.key
-*.pem
-**/vt_config.json
-**/config_files/vt_config.json
+# Allowlisted files
+!requirements_backup.txt
 
-# Large Files (uploaded separately)
-*.csv
-*.keras
-*.h5
-*.pkl
-Dataset/
-output/
-models/*.keras
-models/*.h5
+# Exclude a Windows path that fails indexing
+testing_code/vm_related/VM_Testing_Package_20260210_020538/ransomware_simulator.py
 
-# Temporary Files
-*.tmp
-*.temp
-temp/
-__pycache__/
-
-# OS Files
-Thumbs.db
-desktop.ini
-.DS_Store
-
-# Compiled files
-*.pyc
-*.pyo
-
-# Jupyter Notebooks checkpoints
-.ipynb_checkpoints/
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Documentation builds
-docs/_build/
+# Ignore generated files and secrets within allowlisted paths
+**/__pycache__/
+**/*.py[cod]
+**/*.log
+**/build/
+**/dist/
+**/*.tmp
+**/*.temp
+**/.venv/
+**/venv/
+**/env/
+**/.env
+**/Credentials
+**/*.key
+**/*.pem

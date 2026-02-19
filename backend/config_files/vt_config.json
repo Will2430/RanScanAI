@@ -1,0 +1,15 @@
+{
+  "api_key": "1d3f2196def848986ea09d597790eda7ba8166430e995d1646e03ceb5a1cc63f",
+  "rate_limit": {
+    "requests_per_minute": 4,
+    "requests_per_day": 500,
+    "comment": "Free tier limits: 4 req/min, 500 req/day"
+  },
+  "usage": {
+    "enable_caching": true,
+    "confidence_threshold": 0.3,
+    "confidence_threshold_high": 0.7,
+    "comment": "Call VT API only when confidence is between 0.3 and 0.7"
+  },
+  "instructions": "Get your free API key at: https://www.virustotal.com/gui/my-apikey"
+}

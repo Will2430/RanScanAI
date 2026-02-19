@@ -228,7 +228,7 @@ def step_4_test_with_model():
             print("DETECTION RESULT")
             print("="*60)
             print(f"File: {EXE_PATH.name}")
-            print(f"Prediction: {result.get('prediction', 'Unknown')}")
+            print(f"Prediction: {result.get('prediction_label', 'Unknown')}")
             print(f"Confidence: {result.get('confidence', 'N/A')}")
             print(f"Is Malicious: {result.get('is_malicious', result.get('prediction') == 'malicious')}")
             
@@ -270,6 +270,54 @@ def step_4_test_with_model():
         return None
     except Exception as e:
         print(f" Error testing with model: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def step_4b_multi_model_comparison():
+    """Step 4B: Compare predictions across all models (RF, GB, XGBoost, CNN, Ensemble)"""
+    print_section("STEP 4B: Multi-Model Comparison (OPTIONAL)")
+    
+    print("This will compare predictions from:")
+    print("  - Random Forest")
+    print("  - Gradient Boosting")
+    print("  - XGBoost")
+    print("  - 1D CNN")
+    print("  - Ensemble (RF+GB+XGB)")
+    print("\nRequires: All models trained and saved in models/ directory")
+    
+    choice = input("\nRun multi-model comparison? (y/n): ").lower()
+    if choice != 'y':
+        print("Skipping multi-model comparison")
+        return None
+    
+    benchmark_script = SCRIPT_DIR / "multi_model_benchmark.py"
+    
+    if not benchmark_script.exists():
+        print(f"⚠ Benchmark script not found: {benchmark_script}")
+        print("  Cannot run multi-model comparison")
+        return None
+    
+    print("\n🔬 Running multi-model benchmark...")
+    print("This will test all models on the same executable + behavioral data")
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, str(benchmark_script)],
+            capture_output=False,  # Show output in real-time
+            text=True
+        )
+        
+        if result.returncode == 0:
+            print("\n✓ Multi-model comparison completed successfully")
+            return True
+        else:
+            print(f"\n⚠ Comparison failed with code {result.returncode}")
+            return False
+            
+    except Exception as e:
+        print(f"⚠ Error during comparison: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -346,6 +394,7 @@ def main():
     print("  2. Build malicious executable")
     print("  3. Analyze PE headers")
     print("  4. Test with ML model")
+    print("  4B. Multi-model comparison (optional)")
     print("  5. Generate report")
     
     choice = input("\nContinue? (y/n): ").lower()
@@ -371,7 +420,10 @@ def main():
     
     # Test with model
     result = step_4_test_with_model()
+    ## Optional: Multi-model comparison
+    step_4b_multi_model_comparison()
     
+    # 
     # Generate report
     step_5_generate_report()
     

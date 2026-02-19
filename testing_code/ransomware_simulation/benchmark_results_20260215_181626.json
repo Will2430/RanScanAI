@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-02-15T18:16:26.834922",
+  "test_file": "C:\\Users\\willi\\OneDrive\\Test\\K\\testing_code\\ransomware_simulation\\dist\\System_Update.exe",
+  "behavioral_data": "C:\\Users\\willi\\OneDrive\\Test\\K\\testing_code\\ransomware_simulation\\behavioral_data.json",
+  "results": {
+    "Random Forest": {
+      "prediction": 1,
+      "label": "MALICIOUS",
+      "confidence": 0.5451659451659452,
+      "probability": 0.5451659451659452,
+      "latency_ms": 53.452491760253906
+    },
+    "Gradient Boosting": {
+      "prediction": 1,
+      "label": "MALICIOUS",
+      "confidence": 0.6918664399008486,
+      "probability": 0.6918664399008486,
+      "latency_ms": 2.5153160095214844
+    },
+    "XGBoost": {
+      "prediction": 1,
+      "label": "MALICIOUS",
+      "confidence": 0.9447741508483887,
+      "probability": 0.9447741508483887,
+      "latency_ms": 13.638734817504883
+    },
+    "1D CNN": {
+      "prediction": 0,
+      "label": "BENIGN",
+      "confidence": 1.0,
+      "probability": 0.0,
+      "latency_ms": 470.522403717041
+    }
+  },
+  "analysis": {
+    "consensus": "MALICIOUS",
+    "malicious_votes": 3,
+    "total_votes": 4,
+    "average_confidence": 0.7954516339787956,
+    "disagreement": true
+  }
+}

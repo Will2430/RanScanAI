@@ -1,164 +1,101 @@
 {
-  "target": "C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe",
-  "start_time": "2026-02-11T18:02:22.182457",
+  "target": "C:\\Users\\willi\\OneDrive\\Test\\K\\testing_code\\activity_monitor\\ransomware_simulator.py",
+  "start_time": "2026-02-17T22:15:11.017224",
   "registry": {
-    "read": 0,
-    "write": 0,
+    "read": 7194,
+    "write": 60,
     "delete": 0,
-    "keys_modified": []
+    "keys_modified": [
+      "HKCU\\Software\\TestRansomware",
+      "HKCU\\Software\\TestRansomware\\Persistence",
+      "HKCU\\Software\\TestRansomware\\Encryption",
+      "HKCU\\Software\\TestRansomware\\C2Config"
+    ]
   },
   "network": {
-    "dns": 0,
-    "http": 0,
-    "connections": 0,
-    "domains": []
+    "dns": 1000,
+    "http": 10,
+    "connections": 1010,
+    "domains": [
+      "c2-server.malware-test.invalid",
+      "evil-command-control.invalid",
+      "ransomware-payment.invalid"
+    ]
   },
   "processes": {
-    "created": [
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      },
-      {
-        "name": "tmphtzpzzjg.tmp",
-        "pid": 6188,
-        "cmdline": "C:\\Users\\User\\AppData\\Local\\Temp\\is-M95DH.tmp\\tmphtzpzzjg.tmp /SL5=$B0D54,157774726,806400,C:\\Users\\User\\AppData\\Local\\Temp\\tmphtzpzzjg.exe --auto-run"
-      }
-    ],
-    "total": 2,
-    "suspicious": 0,
-    "malicious": 0
+    "total": 50,
+    "created": []
   },
   "files": {
-    "created": [],
-    "modified": [],
-    "deleted": [],
-    "encrypted": [],
-    "suspicious": 0,
-    "malicious": 0
+    "created": [
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\YyvPag0LQKa1.jpg",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\FTQkO8FW4Xho.pdf",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\hgXbEReDFneT.jpg",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\jf3PI12Tj5Ie.pdf",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\ylFmHgW4uXqm.xlsx",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\O2PkK1F2JGRv.jpg",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\NbBNTMjGHlyV.xlsx",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\zmg3vadApSGZ.xlsx",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\3NkgMBTJmmXC.xlsx",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\mjem9gptbp0x.xlsx",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\j7BhohRVgG1Q.txt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\VqcdOOV8BHtl.txt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\XIujfP7sA5aN.txt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\jc8kC3SG4ilB.jpg",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\Z39kVuN6Zi0L.txt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\EmmVVIDKM5QC.doc",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\0LgJejTYb6L2.doc",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\4ccXoyoJUmX6.pdf",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\QeTdOjk2XArm.doc",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\0eKtsATUG0Rz.txt"
+    ],
+    "encrypted": [
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\YyvPag0LQKa1.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\FTQkO8FW4Xho.crypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\hgXbEReDFneT.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\jf3PI12Tj5Ie.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\ylFmHgW4uXqm.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\O2PkK1F2JGRv.crypto",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\NbBNTMjGHlyV.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\zmg3vadApSGZ.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\3NkgMBTJmmXC.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\mjem9gptbp0x.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\j7BhohRVgG1Q.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\VqcdOOV8BHtl.crypt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\XIujfP7sA5aN.crypt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\jc8kC3SG4ilB.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\Z39kVuN6Zi0L.crypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\EmmVVIDKM5QC.crypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\0LgJejTYb6L2.crypto",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\4ccXoyoJUmX6.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\QeTdOjk2XArm.crypt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\0eKtsATUG0Rz.encrypted"
+    ],
+    "deleted": [
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\ylFmHgW4uXqm.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\NbBNTMjGHlyV.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\zmg3vadApSGZ.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\PR0SjmVY8Nn8.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\SAaU1v9IBVfr.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\QNlXYh477yuO.locked",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\yJw5dVH4yxV2.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\bKWcdm1TKJro.crypto",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\pWeogGsDrvDt.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\cGEwz35cO6zi.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\MqtAbuA848wW.crypt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\fh7RRrNuVoix.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\rjRvMEyRA6xu.crypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\2oRDrU55upMF.crypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\JIimapSpbhST.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\1WQTkIKuEWIx.encrypted",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\dj66MgrPJ52Y.crypt",
+      "C:\\Users\\willi\\Downloads\\RANSOMWARE_TEST_FOLDER\\CbDPOB7uelz8.encrypted"
+    ],
+    "suspicious": 500,
+    "malicious": 500
   },
-  "dlls": [
-    "ntdll.dll",
-    "netmsg.dll",
-    "uxtheme.dll",
-    "apphelp.dll",
-    "imm32.dll",
-    "rpcrt4.dll",
-    "combase.dll",
-    "advapi32.dll",
-    "msctf.dll",
-    "ucrtbase.dll",
-    "win32u.dll",
-    "shell32.dll",
-    "bcrypt.dll",
-    "msvcrt.dll",
-    "user32.dll",
-    "sechost.dll",
-    "kernel32.dll",
-    "msvcp_win.dll",
-    "oleaut32.dll",
-    "gdi32full.dll",
-    "KernelBase.dll",
-    "comctl32.dll",
-    "gdi32.dll",
-    "wow64cpu.dll",
-    "wow64win.dll",
-    "wow64.dll"
-  ],
+  "dlls": [],
   "apis": 0,
-  "execution_time": 10.2034752368927,
-  "end_time": "2026-02-11T18:02:33.254834",
-  "summary": {
-    "registry_total": 0,
-    "files_total": 0,
-    "network_total": 0,
-    "dlls_count": 26,
-    "suspicious_activity": false
-  }
+  "execution_time": 21.580586194992065,
+  "status": "completed"
 }

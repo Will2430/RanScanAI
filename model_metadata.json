@@ -1,7 +1,0 @@
-{
-  "accuracy": 0.9940785788589261,
-  "n_features": 15,
-  "model_type": "RandomForestClassifier",
-  "n_estimators": 100,
-  "max_depth": 15
-}

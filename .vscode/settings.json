@@ -1,10 +1,10 @@
 {
     "python.REPL.enableREPLSmartSend": false,
-    "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.defaultPackageManager": "ms-python.python:pip",
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
     "python-envs.pythonProjects": [],
     "chat.tools.terminal.autoApprove": {
-        "/^C:/Users/User/OneDrive/Test/K/\\.venv/Scripts/python\\.exe train_zenodo_model\\.py$/": {
+        "/^C:/Users/willi/OneDrive/Test/K/\\.venv/Scripts/python\\.exe train_zenodo_model\\.py$/": {
             "approve": true,
             "matchCommandLine": true
         }

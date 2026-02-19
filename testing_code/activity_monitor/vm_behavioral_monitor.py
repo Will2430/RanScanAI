@@ -23,6 +23,12 @@ from datetime import datetime
 from collections import defaultdict
 import threading
 
+# Fix Windows console encoding issues with emojis
+import io
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 
 class BehavioralMonitor:
     """Monitor ransomware behavior in real-time"""
@@ -343,7 +349,7 @@ def main():
     print("="*80)
     print("VM Behavioral Monitor for Ransomware Testing")
     print("="*80)
-    print(f"\n⚠️  RUNNING IN VM ONLY - DO NOT RUN ON HOST MACHINE")
+    print(f"\n  RUNNING IN VM ONLY - DO NOT RUN ON HOST MACHINE")
     print(f"Target: {target_exe}")
     print(f"Watch Directory: {watch_dir}")
     
