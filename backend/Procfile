@@ -1,0 +1,4 @@
+# Procfile for Heroku, Railway, Render (when not using Docker)
+# This is a fallback if the platform doesn't auto-detect Docker
+
+web: uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}

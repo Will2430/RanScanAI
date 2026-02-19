@@ -1,0 +1,52 @@
+# Don't copy these to Docker image
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist/
+build/
+
+# Environment and secrets
+.env
+Credentials
+*.key
+*.pem
+
+# Logs and temp files
+*.log
+temp_scans/*
+!temp_scans/.gitkeep
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+venvv/
+env/
+ENV/
+.venv/
+
+# Model files (if large, download at runtime or mount as volume)
+# Uncomment if models are too large:
+# *.pkl
+# *.keras
+# *.h5
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
