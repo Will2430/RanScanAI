@@ -13,14 +13,17 @@ RUN apt-get update && apt-get install -y \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Copy requirements from backend folder (build context is repo root)
+COPY backend/requirements.txt ./requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy application code from backend folder
+COPY backend/ .
+
+# Copy model files from models folder (parent directory)
+COPY models/ ./models/
 
 # Create necessary directories
 RUN mkdir -p temp_scans
