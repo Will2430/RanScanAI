@@ -18,6 +18,8 @@ dataset/Sensors*
 !browser-extension/**
 !db-init/
 !db-init/**
+!frontend/
+!frontend/**
 !htmls/
 !htmls/**
 !native-host/

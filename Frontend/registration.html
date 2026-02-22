@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Registration Portal - RanScanAI</title>
+    <link rel="stylesheet" href="registration_styles.css">
+</head>
+<body>
+    <div class="main-wrapper">
+        <!-- Left Panel - Branding -->
+        <div class="branding-panel">
+            <div class="branding-content">
+                <div class="logo-section">
+                    <div class="logo-icon">🔐</div>
+                    <h1>RanScanAI</h1>
+                </div>
+                <p class="tagline">Advanced Malware Detection & Analysis</p>
+                <div class="features-list">
+                    <div class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        <span>Real-time Detection</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        <span>ML-Based Analysis</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        <span>Comprehensive Reports</span>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-icon">✓</span>
+                        <span>24/7 Monitoring</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Registration Form -->
+        <div class="form-panel">
+            <!-- Top Navigation -->
+            <div class="form-header">
+                <div class="header-title">
+                    <h2>User Registration</h2>
+                    <p>System Provider Portal - Create new user account</p>
+                </div>
+                <div class="form-progress">
+                    <span class="progress-label">Step <span id="currentStep">1</span> of 3</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Form Container -->
+            <div class="form-container">
+                <form id="registrationForm" class="registration-form">
+                    <!-- Step 1: Personal Information -->
+                    <div class="form-step active" data-step="1">
+                        <div class="step-header">
+                            <h3>Personal Information</h3>
+                            <p>Enter user's basic details</p>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="firstName">First Name <span class="required">*</span></label>
+                                <input 
+                                    type="text" 
+                                    id="firstName" 
+                                    name="firstName" 
+                                    placeholder="John"
+                                    required
+                                >
+                                <span class="error-message" id="firstNameError"></span>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="lastName">Last Name <span class="required">*</span></label>
+                                <input 
+                                    type="text" 
+                                    id="lastName" 
+                                    name="lastName" 
+                                    placeholder="Doe"
+                                    required
+                                >
+                                <span class="error-message" id="lastNameError"></span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="email">Email Address <span class="required">*</span></label>
+                            <input 
+                                type="email" 
+                                id="email" 
+                                name="email" 
+                                placeholder="john.doe@example.com"
+                                required
+                            >
+                            <span class="error-message" id="emailError"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="phone">Phone Number</label>
+                            <input 
+                                type="tel" 
+                                id="phone" 
+                                name="phone" 
+                                placeholder="+1 (555) 000-0000"
+                            >
+                            <span class="error-message" id="phoneError"></span>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Account Credentials -->
+                    <div class="form-step" data-step="2">
+                        <div class="step-header">
+                            <h3>Account Setup</h3>
+                            <p>Create secure credentials</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="username">Username <span class="required">*</span></label>
+                            <input 
+                                type="text" 
+                                id="username" 
+                                name="username" 
+                                placeholder="john_doe_123"
+                                required
+                            >
+                            <span class="help-text">3-20 characters, alphanumeric and underscores</span>
+                            <span class="error-message" id="usernameError"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="password">Password <span class="required">*</span></label>
+                            <div class="password-input-wrapper">
+                                <input 
+                                    type="password" 
+                                    id="password" 
+                                    name="password" 
+                                    placeholder="••••••••"
+                                    required
+                                >
+                                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('password')" title="Show/Hide password">
+                                    <span class="eye-icon">👁️</span>
+                                </button>
+                            </div>
+                            <span class="help-text">Min 8 characters: uppercase, lowercase, number & special char</span>
+                            <div class="password-strength" id="passwordStrength"></div>
+                            <span class="error-message" id="passwordError"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="confirmPassword">Confirm Password <span class="required">*</span></label>
+                            <div class="password-input-wrapper">
+                                <input 
+                                    type="password" 
+                                    id="confirmPassword" 
+                                    name="confirmPassword" 
+                                    placeholder="••••••••"
+                                    required
+                                >
+                                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('confirmPassword')" title="Show/Hide password">
+                                    <span class="eye-icon">👁️</span>
+                                </button>
+                            </div>
+                            <span class="error-message" id="confirmPasswordError"></span>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Role Assignment -->
+                    <div class="form-step" data-step="3">
+                        <div class="step-header">
+                            <h3>Role & Permissions</h3>
+                            <p>Assign user role and access level</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="role">User Role <span class="required">*</span></label>
+                            <select id="role" name="role" required>
+                                <option value="">-- Select a role --</option>
+                                <option value="analyst">Security Analyst</option>
+                                <option value="operator">System Operator</option>
+                                <option value="manager">Manager</option>
+                                <option value="developer">Developer</option>
+                                <option value="viewer">Viewer (Read-Only)</option>
+                            </select>
+                            <span class="role-description" id="roleDescription"></span>
+                            <span class="error-message" id="roleError"></span>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Department</label>
+                            <input 
+                                type="text" 
+                                id="department" 
+                                name="department" 
+                                placeholder="e.g., Cybersecurity, IT Operations"
+                            >
+                        </div>
+
+                        <div class="permissions-summary">
+                            <div class="summary-title">
+                                <span class="shield-icon">🛡️</span>
+                                <strong>Role Permissions</strong>
+                            </div>
+                            <ul id="permissionsList">
+                                <li>Select a role to view permissions</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="prevBtn" onclick="previousStep()" style="display: none;">
+                            ← Previous
+                        </button>
+                        <button type="button" class="btn btn-primary" id="nextBtn" onclick="nextStep()">
+                            Next →
+                        </button>
+                        <button type="submit" class="btn btn-success" id="submitBtn" style="display: none;">
+                            Create User Account
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Status Messages -->
+            <div class="message-container" id="successMessage" style="display: none;">
+                <div class="alert alert-success">
+                    <div class="alert-header">
+                        <span class="alert-icon">✓</span>
+                        <strong>Account Created Successfully</strong>
+                    </div>
+                    <p id="successText">User account has been created and is ready to use.</p>
+                    <p class="message-detail" id="successDetail"></p>
+                    <button type="button" class="btn-small btn-close" onclick="closeMessage('successMessage')">Close</button>
+                </div>
+            </div>
+
+            <div class="message-container" id="errorMessage" style="display: none;">
+                <div class="alert alert-error">
+                    <div class="alert-header">
+                        <span class="alert-icon">✕</span>
+                        <strong>Registration Error</strong>
+                    </div>
+                    <p id="errorText">An error occurred during registration</p>
+                    <button type="button" class="btn-small btn-close" onclick="closeMessage('errorMessage')">Dismiss</button>
+                </div>
+            </div>
+
+            <!-- Loading Overlay -->
+            <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+                <div class="loader"></div>
+                <p>Processing registration...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2026 RanScanAI Security Platform. All rights reserved.</p>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="registration_script.js"></script>
+</body>
+</html>
