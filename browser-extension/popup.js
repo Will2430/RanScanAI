@@ -13,13 +13,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('quarantineBtn').addEventListener('click', toggleQuarantineView);
   document.getElementById('refreshQuarantineBtn').addEventListener('click', loadQuarantineList);
   
-  // Refresh every 5 seconds
+  // Refresh every 3 seconds
   setInterval(() => {
     checkBackendStatus();
     checkNativeHostStatus();
     loadScanHistory();
     updateStats();
-  }, 5000);
+  }, 3000);
 });
 
 // Check if backend is running
