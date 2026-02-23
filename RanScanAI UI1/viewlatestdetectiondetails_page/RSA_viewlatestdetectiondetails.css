@@ -1,0 +1,81 @@
+body {
+    background: #D9D9D9;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    color: #222;
+}
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 32px;
+    background: #fff;
+    border-bottom: 1px solid #e0e4ea;
+}
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.7rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+.logo-img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+.logo-text {
+    display: inline-flex;
+    align-items: center;
+}
+.logo-ran {
+    color: #C83A2B;
+}
+.logo-scan {
+    color: #808080;
+}
+.header-icons .icon {
+    font-size: 1.5rem;
+    margin-left: 24px;
+    cursor: pointer;
+    color: #444;
+}
+.page-wrap {
+    padding: 24px 32px;
+}
+.page-title {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.page-title h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0;
+    color: #26336c;
+}
+.back-link {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #1a237e;
+    color: #fff;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+.back-link:hover {
+    background: #3949ab;
+}
+@media (max-width: 900px) {
+    .header {
+        padding: 16px 20px;
+    }
+    .page-wrap {
+        padding: 18px 20px;
+    }
+}

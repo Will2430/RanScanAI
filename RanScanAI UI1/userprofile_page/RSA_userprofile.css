@@ -1,0 +1,226 @@
+body {
+    background: #D9D9D9;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    color: #222;
+}
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 32px;
+    background: #fff;
+    border-bottom: 1px solid #e0e4ea;
+}
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.7rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+.logo-img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+.logo-text {
+    display: inline-flex;
+    align-items: center;
+}
+.logo-ran {
+    color: #C83A2B;
+}
+.logo-scan {
+    color: #808080;
+}
+.header-icons .icon {
+    font-size: 1.5rem;
+    margin-left: 24px;
+    cursor: pointer;
+    color: #444;
+}
+.page-wrap {
+    padding: 24px 32px;
+}
+.page-title {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 24px;
+}
+.panel-right {
+    display: grid;
+    gap: 24px;
+}
+.profile-card {
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 2px 12px rgba(30, 40, 90, 0.07);
+    padding: 24px;
+    /* min-height: 200px; */
+}
+.profile-summary {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    text-align: center;
+}
+.profile-info-list {
+    width: 100%;
+    display: grid;
+    gap: 12px;
+    margin-top: 18px;
+    margin-right: 27px;
+}
+.profile-info-card {
+    width: 100%;
+    background: #f7f8fb;
+    border-radius: 12px;
+    padding: 12px 14px;
+    text-align: left;
+}
+.info-label {
+    color: #7a7f87;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+.info-value {
+    color: #111;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-top: 4px;
+}
+.profile-avatar {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.profile-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #26336c;
+}
+.profile-role {
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: #2e7d32;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.profile-card h2 {
+    margin: 0 0 12px;
+    color: #111;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+.personal-info-list {
+    width: 96%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.phone-code,
+.phone-number {
+    color: #111;
+}
+.phone-separator {
+    color: #7a7f87;
+    margin: 0 8px;
+}
+.info-value {
+    display: flex;
+    align-items: center;
+}
+.subscription-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 12px;
+    height: 70px;
+}
+.subscription-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.subscription-label {
+    color: #111;
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+.subscription-validity {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.subscription-valid-label {
+    color: #7a7f87;
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin-top: 10px;
+}
+.subscription-valid-date {
+    color: #111;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-top: 10px;
+}
+.subscription-badge {
+    padding: 4px 12px;
+    border-radius: 999px;
+    background: #2e7d32;
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+.page-title h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin: 0;
+    color: #26336c;
+}
+.back-link {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #1a237e;
+    color: #fff;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+.back-link:hover {
+    background: #3949ab;
+}
+@media (max-width: 900px) {
+    .header {
+        padding: 16px 20px;
+    }
+    .page-wrap {
+        padding: 18px 20px;
+    }
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+    .panel-right {
+        grid-template-rows: auto;
+    }
+}
