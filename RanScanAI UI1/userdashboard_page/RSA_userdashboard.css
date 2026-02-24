@@ -1,0 +1,186 @@
+/* styles.css */
+body {
+    background: #D9D9D9;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+    color: #222;
+}
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 32px;
+    background: #fff;
+    border-bottom: 1px solid #e0e4ea;
+}
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.7rem;
+    font-weight: bold;
+    color: #1a237e;
+    letter-spacing: 1px;
+}
+.logo-img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+.logo-text {
+    display: inline-flex;
+    align-items: center;
+}
+.logo-ran {
+    color: #C83A2B;
+}
+.logo-scan {
+    color: #808080;
+}
+.header-icons .icon {
+    font-size: 1.5rem;
+    margin-left: 24px;
+    cursor: pointer;
+    color: #444;
+}
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 32px;
+    padding: 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+.card {
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 2px 12px rgba(30,40,90,0.07);
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+.panel1 .gauge-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 16px;
+    margin-bottom: 18px;
+}
+.gauge-canvas {
+    max-width: 100%;
+    height: auto;
+}
+.panel1-label {
+    color: #26336c;
+}
+.panel1-status {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #c62828;
+    align-self: center;
+    text-align: center;
+    margin-top: auto;
+}
+.panel2-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #c62828;
+    margin-bottom: 8px;
+    width: 100%;
+    text-align: center;
+}
+.panel2-count {
+    font-size: 7rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.panel2-sub {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #c62828;
+    margin-top: 1px;
+}
+.panel2-label {
+    order: 0;
+    margin: 4px 0 18px;
+    color: #26336c;
+    width: 100%;
+    text-align: center;
+}
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    background: #1a237e;
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    margin-top: 12px;
+    transition: background 0.2s;
+}
+.action-btn:hover {
+    background: #3949ab;
+}
+.panel3-title {
+    color: #26336c;
+}
+.panel3-details div {
+    margin-bottom: 4px;
+}
+.panel3-details {
+    padding-left: 175px;
+}
+.panel4-title {
+    color: #26336c;
+}
+
+.panel1-label,
+.panel2-label,
+.panel3-title,
+.panel4-title {
+    order: -1;
+    width: 100%;
+    align-self: center;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 0 0 12px;
+}
+.reports-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 14px;
+}
+.reports-table th, .reports-table td {
+    padding: 8px 6px;
+    text-align: left;
+}
+.reports-table th {
+    color: #1a237e;
+    font-weight: 600;
+    border-bottom: 1px solid #e0e4ea;
+}
+.reports-table td {
+    border-bottom: 1px solid #f0f1f5;
+}
+.eye-icon {
+    font-size: 1.2rem;
+    color: #3949ab;
+    cursor: pointer;
+}
+@media (max-width: 900px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, auto);
+        gap: 24px;
+        padding: 18px;
+    }
+}
