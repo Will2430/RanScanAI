@@ -1,28 +1,337 @@
 {
-  "timestamp": "2026-02-24T00:01:50.865507",
-  "total_calls": 25398,
-  "summary": {
-    "api_file_operations": 4964,
-    "api_registry_reads": 14598,
-    "api_registry_writes": 21,
-    "api_network_connections": 0,
-    "api_network_dns": 0,
-    "api_process_enumerations": 2,
-    "api_crypto_operations": 0
+  "target": "C:\\Users\\User\\OneDrive\\Test\\K\\backend\\temp_scans\\tmpt483ab2y.exe",
+  "timestamp": "2026-02-24T00:01:33.525232",
+  "snapshots": {
+    "files_before": [
+      "C:\\Users\\User\\OneDrive\\Test\\K\\backend\\temp_scans\\tmpt483ab2y.exe"
+    ],
+    "files_after": [
+      "C:\\Users\\User\\OneDrive\\Test\\K\\backend\\temp_scans\\tmpt483ab2y.exe"
+    ],
+    "registry_before": {
+      "Software\\Microsoft\\Windows\\CurrentVersion\\Run": {
+        "OneDrive": [
+          "\"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe\" /background",
+          1
+        ],
+        "ctfmon": [
+          "C:\\Windows\\system32\\ctfmon.exe",
+          1
+        ],
+        "Spotify": [
+          "C:\\Users\\User\\AppData\\Roaming\\Spotify\\Spotify.exe --autostart --minimized",
+          1
+        ],
+        "EpicGamesLauncher": [
+          "\"C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe\" -silent -launchcontext=boot",
+          1
+        ],
+        "Discord": [
+          "\"C:\\Users\\User\\AppData\\Local\\Discord\\Update.exe\" --processStart Discord.exe",
+          1
+        ],
+        "Steam": [
+          "\"C:\\Program Files (x86)\\Steam\\steam.exe\" -silent",
+          1
+        ],
+        "Battle.net": [
+          "\"C:\\Program Files (x86)\\Battle.net\\Battle.net.exe\" --autostarted",
+          1
+        ],
+        "LGHUB": [
+          "\"C:\\Program Files\\LGHUB\\system_tray\\lghub_system_tray.exe\" --minimized",
+          1
+        ],
+        "Microsoft Edge Update": [
+          "\"C:\\Users\\User\\AppData\\Local\\Microsoft\\EdgeUpdate\\1.3.221.3\\MicrosoftEdgeUpdateCore.exe\"",
+          1
+        ],
+        "Overwolf": [
+          "C:\\Program Files (x86)\\Overwolf\\OverwolfLauncher.exe -overwolfsilent",
+          1
+        ],
+        "Lively": [
+          "\"C:\\Users\\User\\AppData\\Local\\Programs\\Lively Wallpaper\\Lively.exe\"",
+          1
+        ],
+        "Microsoft.Lists": [
+          "C:\\Program Files\\Microsoft OneDrive\\26.017.0126.0002\\OneDrive.Sync.Service.exe",
+          1
+        ],
+        "electron.app.Notion": [
+          "C:\\Users\\User\\AppData\\Local\\Programs\\Notion\\Notion.exe --open-at-login",
+          1
+        ],
+        "RiotClient": [
+          "C:\\Riot Games\\Riot Client\\RiotClientServices.exe --launch-background-mode",
+          1
+        ],
+        "Docker Desktop": [
+          "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe",
+          1
+        ],
+        "com.squirrel.slack.slack": [
+          "\"C:\\Users\\User\\AppData\\Local\\slack\\slack.exe\" --process-start-args --startup",
+          1
+        ],
+        "TestRansomware": [
+          "C:\\Users\\User\\AppData\\Local\\Temp\\tmpqet_66kk.exe",
+          1
+        ],
+        "Adobe Acrobat Synchronizer": [
+          "\"C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\AdobeCollabSync.exe\"",
+          1
+        ],
+        "GoogleChromeAutoLaunch_BCEA24321E5E4F1401136BBEDFB545FE": [
+          "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-startup-window /prefetch:5",
+          1
+        ]
+      },
+      "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce": {},
+      "Software\\TestRansomware": {
+        "InstallDate": [
+          "2026-02-23T23:20:52.611078",
+          1
+        ],
+        "Version": [
+          "1.0",
+          1
+        ],
+        "C2Server": [
+          "http://evil-c2-708.malware.test",
+          1
+        ],
+        "EncryptionKey": [
+          "CLwnqmRtgbgbfGuGYrfWsiyjafeQZlajfQJxLlZCyZFZb0im0TsDzJOqff5akSiJ",
+          1
+        ],
+        "VictimID": [
+          "B7dcC041E59975C0DfB5875aDcD63BBA",
+          1
+        ],
+        "FilesEncrypted": [
+          1,
+          4
+        ],
+        "EncryptionComplete": [
+          "TRUE",
+          1
+        ],
+        "Timestamp": [
+          "1770658812",
+          1
+        ],
+        "MalwareEntry1": [
+          "C:\\FakeRansomware_6206.exe",
+          1
+        ],
+        "MalwareEntry2": [
+          "C:\\Windows\\Temp\\malware_2827.dll",
+          1
+        ],
+        "MalwareEntry3": [
+          "C:\\ProgramData\\UpdateService_1625.exe",
+          1
+        ],
+        "C2ServerBackup": [
+          "https://backup-c2-959.onion",
+          1
+        ],
+        "EncryptedFiles": [
+          "9888",
+          1
+        ],
+        "RansomAmount": [
+          "$7982 BTC",
+          1
+        ],
+        "BitcoinAddress": [
+          "bc1q9639156311143151",
+          1
+        ],
+        "DeadlineTimestamp": [
+          "1772119252",
+          1
+        ],
+        "EncryptionAlgorithm": [
+          "AES-256-CBC",
+          1
+        ],
+        "MutexName": [
+          "RansomMutex_21307",
+          1
+        ],
+        "AutoStart": [
+          "1",
+          1
+        ]
+      }
+    },
+    "registry_after": {
+      "Software\\Microsoft\\Windows\\CurrentVersion\\Run": {
+        "OneDrive": [
+          "\"C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe\" /background",
+          1
+        ],
+        "ctfmon": [
+          "C:\\Windows\\system32\\ctfmon.exe",
+          1
+        ],
+        "Spotify": [
+          "C:\\Users\\User\\AppData\\Roaming\\Spotify\\Spotify.exe --autostart --minimized",
+          1
+        ],
+        "EpicGamesLauncher": [
+          "\"C:\\Program Files (x86)\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe\" -silent -launchcontext=boot",
+          1
+        ],
+        "Discord": [
+          "\"C:\\Users\\User\\AppData\\Local\\Discord\\Update.exe\" --processStart Discord.exe",
+          1
+        ],
+        "Steam": [
+          "\"C:\\Program Files (x86)\\Steam\\steam.exe\" -silent",
+          1
+        ],
+        "Battle.net": [
+          "\"C:\\Program Files (x86)\\Battle.net\\Battle.net.exe\" --autostarted",
+          1
+        ],
+        "LGHUB": [
+          "\"C:\\Program Files\\LGHUB\\system_tray\\lghub_system_tray.exe\" --minimized",
+          1
+        ],
+        "Microsoft Edge Update": [
+          "\"C:\\Users\\User\\AppData\\Local\\Microsoft\\EdgeUpdate\\1.3.221.3\\MicrosoftEdgeUpdateCore.exe\"",
+          1
+        ],
+        "Overwolf": [
+          "C:\\Program Files (x86)\\Overwolf\\OverwolfLauncher.exe -overwolfsilent",
+          1
+        ],
+        "Lively": [
+          "\"C:\\Users\\User\\AppData\\Local\\Programs\\Lively Wallpaper\\Lively.exe\"",
+          1
+        ],
+        "Microsoft.Lists": [
+          "C:\\Program Files\\Microsoft OneDrive\\26.017.0126.0002\\OneDrive.Sync.Service.exe",
+          1
+        ],
+        "electron.app.Notion": [
+          "C:\\Users\\User\\AppData\\Local\\Programs\\Notion\\Notion.exe --open-at-login",
+          1
+        ],
+        "RiotClient": [
+          "C:\\Riot Games\\Riot Client\\RiotClientServices.exe --launch-background-mode",
+          1
+        ],
+        "Docker Desktop": [
+          "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe",
+          1
+        ],
+        "com.squirrel.slack.slack": [
+          "\"C:\\Users\\User\\AppData\\Local\\slack\\slack.exe\" --process-start-args --startup",
+          1
+        ],
+        "TestRansomware": [
+          "C:\\Users\\User\\AppData\\Local\\Temp\\tmpqet_66kk.exe",
+          1
+        ],
+        "Adobe Acrobat Synchronizer": [
+          "\"C:\\Program Files\\Adobe\\Acrobat DC\\Acrobat\\AdobeCollabSync.exe\"",
+          1
+        ],
+        "GoogleChromeAutoLaunch_BCEA24321E5E4F1401136BBEDFB545FE": [
+          "\"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe\" --no-startup-window /prefetch:5",
+          1
+        ]
+      },
+      "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce": {},
+      "Software\\TestRansomware": {
+        "InstallDate": [
+          "2026-02-23T23:20:52.611078",
+          1
+        ],
+        "Version": [
+          "1.0",
+          1
+        ],
+        "C2Server": [
+          "http://evil-c2-708.malware.test",
+          1
+        ],
+        "EncryptionKey": [
+          "CLwnqmRtgbgbfGuGYrfWsiyjafeQZlajfQJxLlZCyZFZb0im0TsDzJOqff5akSiJ",
+          1
+        ],
+        "VictimID": [
+          "B7dcC041E59975C0DfB5875aDcD63BBA",
+          1
+        ],
+        "FilesEncrypted": [
+          1,
+          4
+        ],
+        "EncryptionComplete": [
+          "TRUE",
+          1
+        ],
+        "Timestamp": [
+          "1770658812",
+          1
+        ],
+        "MalwareEntry1": [
+          "C:\\FakeRansomware_6206.exe",
+          1
+        ],
+        "MalwareEntry2": [
+          "C:\\Windows\\Temp\\malware_2827.dll",
+          1
+        ],
+        "MalwareEntry3": [
+          "C:\\ProgramData\\UpdateService_1625.exe",
+          1
+        ],
+        "C2ServerBackup": [
+          "https://backup-c2-959.onion",
+          1
+        ],
+        "EncryptedFiles": [
+          "9888",
+          1
+        ],
+        "RansomAmount": [
+          "$7982 BTC",
+          1
+        ],
+        "BitcoinAddress": [
+          "bc1q9639156311143151",
+          1
+        ],
+        "DeadlineTimestamp": [
+          "1772119252",
+          1
+        ],
+        "EncryptionAlgorithm": [
+          "AES-256-CBC",
+          1
+        ],
+        "MutexName": [
+          "RansomMutex_21307",
+          1
+        ],
+        "AutoStart": [
+          "1",
+          1
+        ]
+      }
+    }
   },
-  "counters": {
-    "file_creates": 1455,
-    "file_writes": 3509,
-    "file_reads": 5813,
-    "file_renames": 0,
-    "file_deletes": 0,
-    "reg_reads": 14598,
-    "reg_writes": 21,
-    "net_dns": 0,
-    "net_connect": 0,
-    "net_sendto": 0,
-    "proc_enum": 2,
-    "crypto_ops": 0
+  "runtime_data": {
+    "process_tree": [],
+    "network_connections": [],
+    "dlls_loaded": [],
+    "execution_time": 0.0
   },
   "api_sequence": [
     {
@@ -2658,384 +2967,83 @@
       }
     }
   ],
-  "apis": [
-    [
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey",
-      "NtOpenKey"
-    ]
-  ]
+  "behavioral_changes": {
+    "filesystem": {
+      "files_created": [],
+      "files_deleted": [],
+      "files_encrypted": [],
+      "ransom_notes": [],
+      "total_created": 0,
+      "total_deleted": 0,
+      "total_encrypted": 0,
+      "total_ransom_notes": 0
+    },
+    "registry": {
+      "writes": 0,
+      "deletes": 0,
+      "keys_modified": [],
+      "persistence_attempts": []
+    }
+  },
+  "patterns": {
+    "mass_file_encryption": false,
+    "shadow_copy_deletion": false,
+    "registry_persistence": false,
+    "network_c2_communication": false,
+    "ransom_note_creation": false,
+    "mass_file_deletion": false,
+    "suspicious_process_creation": false,
+    "api_encrypt_rename_sequence": false
+  },
+  "ml_features": {
+    "file_created_count": 0,
+    "file_deleted_count": 0,
+    "file_encrypted_count": 0,
+    "ransom_note_count": 0,
+    "registry_write_count": 0,
+    "registry_delete_count": 0,
+    "persistence_attempt_count": 0,
+    "registry_read_count": 14598,
+    "process_spawn_count": 0,
+    "network_connection_count": 0,
+    "dll_load_count": 0,
+    "execution_time": 0.0,
+    "system_process_count": 0,
+    "api_network_connections": 0,
+    "api_network_dns": 0,
+    "api_sequence_length": 376,
+    "api_file_operations": 4964,
+    "api_registry_operations": 21,
+    "api_crypto_operations": 0,
+    "api_network_operations": 0,
+    "has_mass_encryption": 0,
+    "has_shadow_copy_deletion": 0,
+    "has_registry_persistence": 0,
+    "has_network_c2": 0,
+    "has_ransom_note": 0,
+    "has_mass_deletion": 0,
+    "has_suspicious_process": 0,
+    "has_api_encrypt_rename": 0,
+    "file_delete_ratio": 0.0,
+    "encryption_ratio": 0.0,
+    "pattern_detection_count": 0
+  },
+  "risk_score": 0,
+  "api_summary": {
+    "api_file_operations": 4964,
+    "api_registry_reads": 14598,
+    "api_registry_writes": 21,
+    "api_network_connections": 0,
+    "api_network_dns": 0,
+    "api_process_enumerations": 2,
+    "api_crypto_operations": 0
+  },
+  "risk_level": "LOW",
+  "risk_description": "Likely benign",
+  "metadata": {
+    "target_file": "C:\\Users\\User\\OneDrive\\Test\\K\\backend\\temp_scans\\tmpt483ab2y.exe",
+    "analysis_time": "2026-02-24T00:01:50.911091",
+    "analyzer_version": "2.0",
+    "approach": "real_sandbox_direct_execution"
+  }
 }

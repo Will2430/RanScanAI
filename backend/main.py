@@ -33,23 +33,17 @@ sys.path.insert(0, str(workspace_root))  # For migration_package imports
 sys.path.insert(0, str(Path(__file__).parent.parent))  # For Iteration_1/ imports
 
 # Import model modules
-try:
-    from models.ml_model import MalwareDetector
-except ImportError:
-    from iteration_1.backend.models.ml_model import MalwareDetector
+from ml_model import MalwareDetector
 
 # CNN client is optional (only if you have CNN service running)
 CNNModelClient = None
 try:
-    from iteration_1.backend.models.cnn_client import CNNModelClient
+    from cnn_client import CNNModelClient
     logger.info("✓ CNN client module imported successfully")
 except ImportError as e:
     logger.debug(f"Could not import from migration_package.cnn_client: {e}")
 
-try:
-    from iteration_1.backend.vt_integration import VirusTotalEnricher
-except ImportError:
-    from vt_integration import VirusTotalEnricher
+from vt_integration import VirusTotalEnricher
 
 # Configuration
 # Toggle between Traditional ML and CNN model

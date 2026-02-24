@@ -274,9 +274,8 @@ class PEFeatureExtractor:
         behavioral_features = [
             'registry_read', 'registry_write', 'registry_delete', 'registry_total',
             'network_threats', 'network_dns', 'network_http', 'network_connections',
-            'processes_malicious', 'processes_suspicious', 'processes_monitored',
-            'total_procsses', 'files_malicious', 'files_suspicious',
-            'files_text', 'files_unknown', 'dlls_calls', 'apis'
+            'processes_monitored','total_procsses', 'files_text', 'files_unknown', 'dlls_calls', 
+            'apis'
         ]
         for name in behavioral_features:
             features[name] = 0.0
@@ -321,25 +320,25 @@ class PEFeatureExtractor:
         """
         Enrich features with VT behavioral data
         
-        Matches structure returned by vt_integration.VirusTotalEnricher:
+        Matches cleaned feature set (14 behavioral features, NO data leakage):
         {
             'detection': {...},
             'behavior': {
                 'registry': {'read': int, 'write': int, 'delete': int},
                 'network': {'threats': int, 'dns': int, 'http': int, 'connections': int},
-                'processes': {'malicious': int, 'suspicious': int, 'monitored': int, 'total': int},
-                'files': {'malicious': int, 'suspicious': int, 'text': int, 'unknown': int},
+                'processes': {'monitored': int, 'total': int},  # NO malicious/suspicious
+                'files': {'text': int, 'unknown': int},  # NO malicious/suspicious
                 'dlls': int,
                 'apis': int
             }
         }
         
         Args:
-            features: Base PE features (78 features)
+            features: Base PE features (67 features: 53 static + 14 behavioral)
             vt_data: VT enrichment data from VirusTotalEnricher.check_file()
             
         Returns:
-            Enriched feature array
+            Enriched feature array (static features preserved, behavioral features updated)
         """
         # Create feature dict for easier manipulation
         feature_dict = {name: features[i] for i, name in enumerate(self.FEATURE_NAMES)}
@@ -369,17 +368,13 @@ class PEFeatureExtractor:
         feature_dict['network_http'] = network.get('http', 0)
         feature_dict['network_connections'] = network.get('connections', 0)
         
-        # Process activity
+        # Process activity (2 features) - NO malicious/suspicious (data leakage removed)
         processes = behavior.get('processes', {})
-        feature_dict['processes_malicious'] = processes.get('malicious', 0)
-        feature_dict['processes_suspicious'] = processes.get('suspicious', 0)
         feature_dict['processes_monitored'] = processes.get('monitored', 0)
         feature_dict['total_procsses'] = processes.get('total', 0)
         
-        # File activity
+        # File activity (2 features) - NO malicious/suspicious (data leakage removed)
         files = behavior.get('files', {})
-        feature_dict['files_malicious'] = files.get('malicious', 0)
-        feature_dict['files_suspicious'] = files.get('suspicious', 0)
         feature_dict['files_text'] = files.get('text', 0)
         feature_dict['files_unknown'] = files.get('unknown', 0)
         

@@ -34,9 +34,25 @@ from collections import defaultdict
 
 # Fix Windows console encoding issues with emojis
 import io
-if sys.stdout.encoding != 'utf-8':
+if hasattr(sys.stdout, 'reconfigure'):
+    # Python 3.7+: reconfigure in-place (safe with subprocess PIPE)
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass  # Already correct encoding or not reconfigurable
+elif sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    # Fallback for older Python: replace wrapper (flush before swap)
+    sys.stdout.flush()
+    sys.stderr.flush()
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
+
+# Stems that identify the known ransomware simulator (case-insensitive).
+# Any target whose stem matches one of these uses the designated test folder
+# as watch_dir. Everything else watches its own parent directory.
+_SIMULATOR_STEMS = {'ransomware_simulator', 'system_update'}
 
 
 class CompleteAnalyzer:
@@ -45,33 +61,57 @@ class CompleteAnalyzer:
     """
     
     def __init__(self, target_path: str, watch_dir: str = None):
-        self.target_path = Path(target_path).resolve()  # Convert to absolute path
-        self.watch_dir = Path(watch_dir) if watch_dir else Path("C:/Users/willi/Downloads/RANSOMWARE_TEST_FOLDER")
-        self.results_dir = Path(__file__).parent / "analysis_results"
-        self.results_dir.mkdir(exist_ok=True)
-        
-        # Behavioral data
-        self.analysis = {
-            'target': str(self.target_path),
-            'timestamp': datetime.now().isoformat(),
-            'snapshots': {
-                'files_before': set(),
-                'files_after': set(),
-                'registry_before': {},
-                'registry_after': {}
-            },
-            'runtime_data': {
-                'process_tree': [],
-                'network_connections': [],
-                'dlls_loaded': [],
-                'execution_time': 0.0
-            },
-            'api_sequence': [],
-            'behavioral_changes': {},
-            'patterns': {},
-            'ml_features': {},
-            'risk_score': 0.0
-        }
+        try:
+            self.target_path = Path(target_path).resolve()  # Convert to absolute path
+
+            # Detect whether the target is the known ransomware simulator so we
+            # can switch watch_dir and execution flags accordingly.
+            self.is_simulator = self.target_path.stem.lower() in _SIMULATOR_STEMS
+
+            if watch_dir:
+                self.watch_dir = Path(watch_dir)
+            elif self.is_simulator:
+                # Simulator writes files to the designated test folder — watch that.
+                try:
+                    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+                    from dynamic_path_config.path_config import get_test_folder
+                    self.watch_dir = get_test_folder()
+                except Exception:
+                    self.watch_dir = Path.home() / 'Downloads' / 'RANSOMWARE_TEST_FOLDER'
+            else:
+                # Generic EXE (installer, legit app) — watch its own parent directory.
+                # Captures any files the EXE drops alongside itself.
+                self.watch_dir = self.target_path.parent
+            self.results_dir = Path(__file__).parent / "analysis_results"
+            self.results_dir.mkdir(exist_ok=True, parents=True)
+            
+            # Behavioral data (use lists instead of sets for JSON serialization)
+            self.analysis = {
+                'target': str(self.target_path),
+                'timestamp': datetime.now().isoformat(),
+                'snapshots': {
+                    'files_before': [],  # Changed from set() to list
+                    'files_after': [],   # Changed from set() to list
+                    'registry_before': {},
+                    'registry_after': {}
+                },
+                'runtime_data': {
+                    'process_tree': [],
+                    'network_connections': [],
+                    'dlls_loaded': [],
+                    'execution_time': 0.0
+                },
+                'api_sequence': [],
+                'behavioral_changes': {},
+                'patterns': {},
+                'ml_features': {},
+                'risk_score': 0.0
+            }
+        except Exception as e:
+            print(f"ERROR in CompleteAnalyzer.__init__: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            raise
     
     def take_filesystem_snapshot(self):
         """Take snapshot of files before execution"""
@@ -81,12 +121,12 @@ class CompleteAnalyzer:
             print(f"   Creating watch directory...")
             self.watch_dir.mkdir(parents=True, exist_ok=True)
         
-        files_before = set()
+        files_before = []
         for file in self.watch_dir.rglob('*'):
             if file.is_file():
-                files_before.add(str(file))
+                files_before.append(str(file))
         
-        self.analysis['snapshots']['files_before'] = list(files_before)
+        self.analysis['snapshots']['files_before'] = files_before
         print(f"   ✓ {len(files_before)} files catalogued")
         return files_before
     
@@ -145,9 +185,21 @@ class CompleteAnalyzer:
                     text=True
                 )
             else:
-                # Executable
+                # Executable — cwd and extra flags depend on whether this is the
+                # known simulator or a generic EXE (installer, legit app, etc.).
+                exe_cmd = [str(self.target_path)]
+                if self.is_simulator:
+                    # Simulator understands --auto-run and expects to find the
+                    # test folder relative to cwd.
+                    exe_cmd.append('--auto-run')
+                    exe_cwd = str(self.watch_dir)
+                else:
+                    # Generic EXE: do NOT inject unknown flags; run from its own
+                    # directory so relative-path lookups inside the installer work.
+                    exe_cwd = str(self.target_path.parent)
                 process = psutil.Popen(
-                    [str(self.target_path), '--auto-run'],
+                    exe_cmd,
+                    cwd=exe_cwd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True
@@ -156,11 +208,23 @@ class CompleteAnalyzer:
             malware_pid = process.pid
             print(f"   ✓ Process spawned (PID: {malware_pid})")
             
+            # Early check if process died immediately
+            time.sleep(0.5)
+            if process.poll() is not None:
+                print(f"   ⚠️  WARNING: Process exited immediately with code {process.returncode}")
+                stdout, stderr = process.communicate(timeout=1)
+                if stdout:
+                    print(f"   STDOUT: {stdout[:500]}")
+                if stderr:
+                    print(f"   STDERR: {stderr[:500]}")
+                return False
+            
             # Monitor in real-time
             monitored_process = psutil.Process(malware_pid)
             process_tree = []
             network_connections = []
             dlls_loaded = set()
+            max_system_processes = 0  # Track total system processes (proxy for processes_monitored)
             
             # Monitor for specified timeout
             elapsed = 0
@@ -220,6 +284,14 @@ class CompleteAnalyzer:
                                     dlls_loaded.add(dll_name)
                     except:
                         pass
+
+                    # Track total system processes (malware often enumerates these)
+                    try:
+                        system_proc_count = len(psutil.pids())
+                        if system_proc_count > max_system_processes:
+                            max_system_processes = system_proc_count
+                    except:
+                        pass
                     
                     time.sleep(0.2)  # Faster polling to catch transient activity
                     elapsed = time.time() - start_time
@@ -265,7 +337,8 @@ class CompleteAnalyzer:
                 'network_connections': network_connections,
                 'dlls_loaded': list(dlls_loaded),
                 'execution_time': execution_time,
-                'main_pid': malware_pid
+                'main_pid': malware_pid,
+                'max_system_processes': max_system_processes  # Total procs seen on system during run
             }
             
             print(f"\n   ✓ Execution complete")
@@ -286,18 +359,19 @@ class CompleteAnalyzer:
         """Analyze file changes after execution"""
         print(f"\n📊 Analyzing filesystem changes...")
         
-        files_after = set()
+        files_after = []
         for file in self.watch_dir.rglob('*'):
             if file.is_file():
-                files_after.add(str(file))
+                files_after.append(str(file))
         
-        self.analysis['snapshots']['files_after'] = list(files_after)
+        self.analysis['snapshots']['files_after'] = files_after
         
-        files_before = set(self.analysis['snapshots']['files_before'])
+        files_before_set = set(self.analysis['snapshots']['files_before'])
+        files_after_set = set(files_after)
         
         # Detect changes
-        files_created = files_after - files_before
-        files_deleted = files_before - files_after
+        files_created = files_after_set - files_before_set
+        files_deleted = files_before_set - files_after_set
         files_encrypted = []
         ransom_notes = []
         
@@ -527,6 +601,8 @@ class CompleteAnalyzer:
                     with open(api_json, 'r') as f:
                         api_data = json.load(f)
                         self.analysis['api_sequence'] = api_data.get('api_sequence', [])
+                        # Store the summary counts for ml_features
+                        self.analysis['api_summary'] = api_data.get('summary', {})
                     
                     print(f"   Captured {len(self.analysis['api_sequence'])} API calls")
                     return self.analysis['api_sequence']
@@ -553,7 +629,13 @@ class CompleteAnalyzer:
         runtime = self.analysis['runtime_data']
         patterns = self.analysis['patterns']
         api_seq = self.analysis.get('api_sequence', [])
-        
+        # Summary counts from the NT-level tracer (includes registry/network/process hooks)
+        api_summary = self.analysis.get('api_summary', {})
+
+        # No fallback values — if Frida captured nothing the counts stay at 0.
+        # Substituting self-reported behavioral_data.json would misrepresent what
+        # the tracer actually observed and corrupt ML feature vectors for non-simulator targets.
+
         features = {
             # File operation features
             'file_created_count': fs_changes.get('total_created', 0),
@@ -566,18 +648,40 @@ class CompleteAnalyzer:
             'registry_delete_count': reg_changes.get('deletes', 0),
             'persistence_attempt_count': len(reg_changes.get('persistence_attempts', [])),
             
+            # Registry reads from NT-level API tracer (NtOpenKey + NtQueryValueKey)
+            'registry_read_count': api_summary.get('api_registry_reads', 0),
+            
             # Runtime features
             'process_spawn_count': len(runtime.get('process_tree', [])),
             'network_connection_count': len(runtime.get('network_connections', [])),
             'dll_load_count': len(runtime.get('dlls_loaded', [])),
             'execution_time': runtime.get('execution_time', 0.0),
             
+            # System-wide process count during malware run (proxy for processes_monitored Zenodo feature)
+            'system_process_count': runtime.get('max_system_processes', 0),
+            
+            # Network counts from NT-level API tracer (ws2_32.dll hooks)
+            'api_network_connections': api_summary.get('api_network_connections', 0),
+            'api_network_dns': api_summary.get('api_network_dns', 0),
+            
             # API sequence features (from Frida trace)
             'api_sequence_length': len(api_seq),
-            'api_file_operations': len([c for c in api_seq if 'File' in str(c.get('api', ''))]),
-            'api_registry_operations': len([c for c in api_seq if 'Reg' in str(c.get('api', ''))]),
-            'api_crypto_operations': len([c for c in api_seq if 'Crypt' in str(c.get('api', ''))]),
-            'api_network_operations': len([c for c in api_seq if any(x in str(c.get('api', '')) for x in ['connect', 'send', 'socket'])]),
+            'api_file_operations': (
+                api_summary.get('api_file_operations', 0)
+                or len([c for c in api_seq if 'File' in str(c.get('api', ''))])
+            ),
+            'api_registry_operations': (
+                api_summary.get('api_registry_writes', 0)
+                or len([c for c in api_seq if 'Reg' in str(c.get('api', ''))])
+            ),
+            'api_crypto_operations': (
+                api_summary.get('api_crypto_operations', 0)
+                or len([c for c in api_seq if 'Crypt' in str(c.get('api', ''))])
+            ),
+            'api_network_operations': (
+                api_summary.get('api_network_connections', 0) + api_summary.get('api_network_dns', 0)
+                or len([c for c in api_seq if any(x in str(c.get('api', '')) for x in ['connect', 'send', 'socket'])])
+            ),
             
             # Pattern-based binary features
             'has_mass_encryption': int(patterns.get('mass_file_encryption', False)),
@@ -603,6 +707,10 @@ class CompleteAnalyzer:
         
         print(f"   Extracted {len(features)} ML features")
         print(f"   Pattern detection count: {features['pattern_detection_count']}")
+        print(f"   Registry reads (API trace): {features['registry_read_count']}")
+        print(f"   System processes observed: {features['system_process_count']}")
+        print(f"   Network connections (API trace): {features['api_network_connections']}")
+        print(f"   DNS lookups (API trace): {features['api_network_dns']}")
         if api_seq:
             print(f"   API sequence length: {len(api_seq)}")
         
@@ -700,8 +808,11 @@ class CompleteAnalyzer:
     def save_complete_analysis(self):
         """Save complete analysis to JSON file"""
         print(f"\n💾 Saving analysis...")
-        
-        output_file = self.results_dir / "complete_analysis.json"
+        # Create timestamped filename to match backend expectations (complete_analysis_*.json)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_file = self.results_dir / f"complete_analysis_{timestamp}.json"
+        # Also maintain a stable filename for manual inspection
+        stable_file = self.results_dir / "complete_analysis.json"
         
         # Add metadata
         self.analysis['metadata'] = {
@@ -713,37 +824,66 @@ class CompleteAnalyzer:
         
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(self.analysis, f, indent=2, ensure_ascii=False)
-        
+
+        # Also write/update a stable file name for compatibility
+        try:
+            with open(stable_file, 'w', encoding='utf-8') as f:
+                json.dump(self.analysis, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print(f"   ⚠️ Could not write stable copy: {e}", file=sys.stderr)
+
         print(f"   ✅ Analysis saved to: {output_file}")
-        
+        print(f"   ℹ️  Stable copy: {stable_file}")
+
         return output_file
 
 
 def main():
     """Main execution workflow"""
-    # Windows encoding fix
-    if sys.platform == 'win32':
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    # Early debug information to help when invoked as subprocess
+    try:
+        # Windows encoding fix - use reconfigure() to avoid subprocess pipe flush issues
+        if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+            sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception as e:
+        pass  # Encoding already set or not configurable
     
-    if len(sys.argv) < 2:
-        print("Usage: python vm_complete_analyzer.py <target.exe|target.py>")
-        print("\nExample:")
-        print("  python vm_complete_analyzer.py ..\\ransomware_simulation\\ransomware_simulator.py")
-        print("  python vm_complete_analyzer.py malicious_sample.exe")
+    try:
+        if len(sys.argv) < 2:
+            print("Usage: python vm_complete_analyzer.py <target.exe|target.py>")
+            print("\nExample:")
+            print("  python vm_complete_analyzer.py ..\\ransomware_simulation\\ransomware_simulator.py")
+            print("  python vm_complete_analyzer.py malicious_sample.exe")
+            sys.exit(1)
+        
+        target = sys.argv[1]
+        
+        # Validate target exists
+        if not Path(target).exists():
+            print(f"ERROR: Target file not found: {target}")
+            print(f"Absolute path checked: {Path(target).resolve()}")
+            sys.exit(1)
+        
+        print("="*80)
+        print("🔬 COMPLETE MALWARE ANALYZER - Real Sandbox Approach")
+        print("="*80)
+        print(f"\nTarget: {target}")
+        print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+    except Exception as e:
+        print(f"FATAL ERROR during initialization: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
-    
-    target = sys.argv[1]
-    
-    print("="*80)
-    print("🔬 COMPLETE MALWARE ANALYZER - Real Sandbox Approach")
-    print("="*80)
-    print(f"\nTarget: {target}")
-    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     try:
         # Initialize analyzer
+        print(f"\nInitializing analyzer...")
         analyzer = CompleteAnalyzer(target)
+        print(f"✓ Analyzer initialized")
+        print(f"   Watch directory: {analyzer.watch_dir}")
+        print(f"   Results directory: {analyzer.results_dir}")
         
         # Phase 1: Take snapshots before execution
         print("\n" + "="*80)
@@ -809,28 +949,33 @@ def main():
         # Save complete analysis
         output_file = analyzer.save_complete_analysis()
         
-        # Final summary
-        print("\n" + "="*80)
-        print("✅ ANALYSIS COMPLETE")
-        print("="*80)
-        
-        fs_changes = analyzer.analysis['behavioral_changes'].get('filesystem', {})
-        reg_changes = analyzer.analysis['behavioral_changes'].get('registry', {})
-        
-        print(f"\n📊 Summary...")
-        print(f"   Files created: {fs_changes.get('total_created', 0)}")
-        print(f"   Files encrypted: {fs_changes.get('total_encrypted', 0)}")
-        print(f"   Files deleted: {fs_changes.get('total_deleted', 0)}")
-        print(f"   Registry writes: {reg_changes.get('writes', 0)}")
-        print(f"   Network connections: {len(analyzer.analysis['runtime_data'].get('network_connections', []))}")
-        print(f"   API calls captured: {len(analyzer.analysis.get('api_sequence', []))}")
-        print(f"   Patterns detected: {sum(analyzer.analysis['patterns'].values())}/8")
-        print(f"   ML features extracted: {len(analyzer.analysis['ml_features'])}")
-        print(f"   Risk score: {analyzer.analysis['risk_score']}/100 ({analyzer.analysis['risk_level']})")
-        
-        print(f"\n📁 Output: {output_file}")
-        print(" Transfer this file to your backend API for ML-based detection")
-        print("="*80)
+        # Final summary with robust error handling
+        try:
+            print("\n" + "="*80)
+            print("✅ ANALYSIS COMPLETE")
+            print("="*80)
+            fs_changes = analyzer.analysis['behavioral_changes'].get('filesystem', {})
+            reg_changes = analyzer.analysis['behavioral_changes'].get('registry', {})
+            print(f"\n📊 Summary...")
+            print(f"   Files created: {fs_changes.get('total_created', 0)}")
+            print(f"   Files encrypted: {fs_changes.get('total_encrypted', 0)}")
+            print(f"   Files deleted: {fs_changes.get('total_deleted', 0)}")
+            print(f"   Registry writes: {reg_changes.get('writes', 0)}")
+            print(f"   Network connections: {len(analyzer.analysis['runtime_data'].get('network_connections', []))}")
+            print(f"   API calls captured: {len(analyzer.analysis.get('api_sequence', []))}")
+            print(f"   Patterns detected: {sum(analyzer.analysis['patterns'].values())}/8")
+            print(f"   ML features extracted: {len(analyzer.analysis['ml_features'])}")
+            print(f"   Risk score: {analyzer.analysis['risk_score']}/100 ({analyzer.analysis['risk_level']})")
+            print(f"\n📁 Output: {output_file}")
+            print(" Transfer this file to your backend API for ML-based detection")
+            print("="*80)
+            print("SCRIPT COMPLETED SUCCESSFULLY")
+        except Exception as summary_error:
+            print(f"\n❌ Error during final summary print: {summary_error}", file=sys.stderr)
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
     
     except KeyboardInterrupt:
         print("\n\n⚠️  Analysis interrupted by user")

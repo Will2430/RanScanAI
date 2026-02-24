@@ -23,19 +23,20 @@ SPEC_FILE = SCRIPT_DIR / "ransomware_simulator.spec"
 # PyInstaller options that create suspicious characteristics
 # Note: We'll use 'python -m PyInstaller' instead of 'pyinstaller' for reliability
 PYINSTALLER_OPTIONS = [
-    "--onefile",                    # Single executable (common for malware)
-    "--windowed",                   # No console window (suspicious)
-    "--clean",                      # Clean PyInstaller cache
+    "--onefile",                    # Single executable (common for malware)  # No console window (suspicious)
+    # "--clean",                    # Clean PyInstaller cache (disabled due to permission issues)
     "--distpath", str(OUTPUT_DIR),  # Output directory
     "--workpath", str(BUILD_DIR),   # Build directory
     "--name", "System_Update",      # Deceptive filename (suspicious)
+    # Include the dynamic_path_config module
+    "--paths", str(SCRIPT_DIR.parent / "dynamic_path_config"),
+    "--hidden-import", "path_config",
     str(RANSOMWARE_SCRIPT)
 ]
 
 # Additional suspicious options
 SUSPICIOUS_OPTIONS = [
-    "--noupx",                      # Don't compress (easier to analyze, but suspicious)
-    "--noconsole",                  # Hide console (very suspicious)
+    "--noupx",                      # Don't compress (easier to analyze, but suspicious  # Hide console (very suspicious)
 ]
 
 
