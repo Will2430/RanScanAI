@@ -1,0 +1,53 @@
+.flex-container{
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    background-color: white;
+    border-radius: 5px;
+
+    &invalid{
+        border-color: orangered;
+    }
+
+    &.removeMargin{
+        margin: 0 !important;
+    }
+}
+
+.icon-container{
+    flex: 0 0 auto;
+    padding: 0 12px;
+
+}
+
+.calender-icon{
+    color: var(--cui-body-color);
+}
+
+.date-picker-container{
+    flex: 1 1 auto;
+}
+
+.react-datepicker-wrapper{
+    display: flex;
+    input{
+        border-bottom-left-radius: 0;
+        border-top-left-radius: 0;
+    }
+}
+
+.react-datepicker__day--selected, .react-datepicker__day--keyboard-selected{
+    background-color: var(--cui-primary);
+    &:hover{
+        background-color: var(--cui-primary-bg);
+    }
+}
+
+.input-color-black{
+    color: black !important;
+}
+
+.date-picker-allign{
+    margin-bottom: 16px;
+    margin-top: 2rem;
+}
