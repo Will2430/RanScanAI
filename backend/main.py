@@ -45,6 +45,24 @@ except ImportError as e:
 
 from vt_integration import VirusTotalEnricher
 
+
+# Import authentication router
+try:
+    logger.info("Attempting to import auth_routes...")
+    from auth import auth_router
+    logger.info(f"✓ Auth routes imported successfully (router type: {type(auth_router)})")
+except ImportError as e:
+    logger.error(f"❌ Auth routes import failed (ImportError): {e}")
+    logger.warning("Auth routes not available - authentication disabled")
+    import traceback
+    traceback.print_exc()
+    auth_router = None
+except Exception as e:
+    logger.error(f"❌ Unexpected error importing auth routes: {e}")
+    import traceback
+    traceback.print_exc()
+    auth_router = None
+
 # Configuration
 # Toggle between Traditional ML and CNN model
 USE_CNN_MODEL = os.getenv("USE_CNN_MODEL", "false").lower() == "true"  # Set to "true" to enable CNN
@@ -69,6 +87,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include authentication routes
+if auth_router:
+    app.include_router(auth_router)
+    logger.info("✓ Authentication routes registered")
+else:
+    logger.warning("⚠️ Authentication routes NOT registered - auth_router is None")
 
 # Global instances
 detector: Optional[MalwareDetector] = None
