@@ -26,6 +26,8 @@ dataset/Sensors*
 !native-host/**
 !testing_code/
 !testing_code/**
+!RanScanAI UI1/
+!RanScanAI UI1/**
 !models/
 !models/**
 

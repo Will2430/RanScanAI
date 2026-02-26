@@ -5,7 +5,8 @@ Handles connections, ORM models, and CRUD operations for terminal logs
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import datetime
-from sqlalchemy import String, Text, DateTime, Integer, Boolean, JSON, ForeignKey
+from sqlalchemy import String, Text, DateTime, Integer, Boolean, JSON, ForeignKey, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from datetime import datetime
 from typing import Optional, Dict, Any
 from pathlib import Path

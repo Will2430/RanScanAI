@@ -1,226 +1,446 @@
-body {
-    background: #D9D9D9;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    margin: 0;
-    color: #222;
+/* ============================================================
+   RanScanAI User Profile — Professional Redesign
+   ============================================================ */
+
+/* --- CSS Custom Properties --- */
+:root {
+    --font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+    /* Brand colours */
+    --brand-red: #C83A2B;
+    --brand-navy: #111A3A;
+    --brand-navy-light: #1C2951;
+    --brand-indigo: #3B51C4;
+
+    /* Neutrals */
+    --bg-body: #060B18;
+    --bg-card: rgba(255,255,255,0.97);
+    --bg-hover: #f7f8fb;
+    --border-light: #E4E7EF;
+    --border-glass: rgba(255,255,255,0.08);
+    --text-primary: #111A3A;
+    --text-secondary: #5B6380;
+    --text-tertiary: #8B92A8;
+
+    /* Semantic */
+    --color-success: #16A34A;
+    --color-success-bg: #dcfce7;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.20);
+    --shadow-card: 0 2px 8px rgba(0,0,0,.25), 0 0 0 1px rgba(255,255,255,.06);
+    --shadow-card-hover: 0 4px 16px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.08);
+
+    /* Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
 }
+
+/* --- Reset & Base --- */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background:
+        radial-gradient(ellipse 900px 600px at 8% 0%, rgba(59,81,196,.22), transparent 60%),
+        radial-gradient(ellipse 700px 500px at 92% 0%, rgba(200,58,43,.12), transparent 60%),
+        radial-gradient(ellipse 600px 400px at 50% 100%, rgba(59,81,196,.08), transparent 70%),
+        linear-gradient(180deg, #080D1C 0%, #060B18 40%, #0A0E1F 100%);
+    background-attachment: fixed;
+    font-family: var(--font-family);
+    color: var(--text-primary);
+    line-height: 1.5;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Header --- */
 .header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px 32px;
-    background: #fff;
-    border-bottom: 1px solid #e0e4ea;
+    padding: 0 32px;
+    height: 64px;
+    background: rgba(8,13,28,0.85);
+    backdrop-filter: blur(16px) saturate(1.6);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    border-bottom: 1px solid var(--border-glass);
+    color: #fff;
 }
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
 .logo {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 1.7rem;
-    font-weight: bold;
-    letter-spacing: 1px;
+    text-decoration: none;
 }
+
 .logo-img {
-    width: 36px;
-    height: 36px;
+    width: 34px;
+    height: 34px;
     object-fit: contain;
 }
+
 .logo-text {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+}
+
+.logo-ran { color: var(--brand-red); }
+.logo-scan { color: #ffffff; }
+.logo-ai { color: #8B9FE8; }
+
+.header-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255,255,255,0.15);
+}
+
+.header-page-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.01em;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.icon-btn {
+    position: relative;
     display: inline-flex;
     align-items: center;
-}
-.logo-ran {
-    color: #C83A2B;
-}
-.logo-scan {
-    color: #808080;
-}
-.header-icons .icon {
-    font-size: 1.5rem;
-    margin-left: 24px;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: rgba(255,255,255,0.6);
     cursor: pointer;
-    color: #444;
+    transition: background 0.15s ease, color 0.15s ease;
+    text-decoration: none;
 }
+
+.icon-btn:hover {
+    background: rgba(255,255,255,0.1);
+    color: #ffffff;
+}
+
+.bell-btn .notif-dot {
+    position: absolute;
+    top: 9px;
+    right: 10px;
+    width: 8px;
+    height: 8px;
+    background: var(--brand-red);
+    border-radius: 50%;
+    border: 2px solid rgba(8,13,28,0.85);
+}
+
+/* --- Page Layout --- */
 .page-wrap {
-    padding: 24px 32px;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 36px 48px;
 }
+
 .page-title {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 16px;
+    margin-bottom: 28px;
 }
-.profile-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    margin-top: 24px;
-}
-.panel-right {
-    display: grid;
-    gap: 24px;
-}
-.profile-card {
-    background: #fff;
-    border-radius: 18px;
-    box-shadow: 0 2px 12px rgba(30, 40, 90, 0.07);
-    padding: 24px;
-    /* min-height: 200px; */
-}
-.profile-summary {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    text-align: center;
-}
-.profile-info-list {
-    width: 100%;
-    display: grid;
-    gap: 12px;
-    margin-top: 18px;
-    margin-right: 27px;
-}
-.profile-info-card {
-    width: 100%;
-    background: #f7f8fb;
-    border-radius: 12px;
-    padding: 12px 14px;
-    text-align: left;
-}
-.info-label {
-    color: #7a7f87;
-    font-size: 0.9rem;
-    font-weight: 600;
-}
-.info-value {
-    color: #111;
-    font-size: 1.05rem;
-    font-weight: 700;
-    margin-top: 4px;
-}
-.profile-avatar {
-    width: 90px;
-    height: 90px;
-    border-radius: 50%;
-    object-fit: cover;
-}
-.profile-name {
-    font-size: 1.2rem;
-    font-weight: 700;
-    color: #26336c;
-}
-.profile-role {
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: #2e7d32;
-    color: #fff;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-}
-.profile-card h2 {
-    margin: 0 0 12px;
-    color: #111;
-    font-size: 1.5rem;
-    font-weight: 700;
-}
-.personal-info-list {
-    width: 96%;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-.phone-code,
-.phone-number {
-    color: #111;
-}
-.phone-separator {
-    color: #7a7f87;
-    margin: 0 8px;
-}
-.info-value {
-    display: flex;
-    align-items: center;
-}
-.subscription-card {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: 12px;
-    height: 70px;
-}
-.subscription-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-.subscription-label {
-    color: #111;
-    font-size: 1.5rem;
-    font-weight: 700;
-}
-.subscription-validity {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-.subscription-valid-label {
-    color: #7a7f87;
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin-top: 10px;
-}
-.subscription-valid-date {
-    color: #111;
-    font-size: 1rem;
-    font-weight: 700;
-    margin-top: 10px;
-}
-.subscription-badge {
-    padding: 4px 12px;
-    border-radius: 999px;
-    background: #2e7d32;
-    color: #fff;
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-}
-.page-title h1 {
-    font-size: 1.6rem;
-    font-weight: 700;
-    margin: 0;
-    color: #26336c;
-}
+
 .back-link {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    background: #1a237e;
-    color: #fff;
-    text-decoration: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
+    gap: 8px;
+    height: 40px;
+    padding: 0 14px;
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.96);
+    color: #334155;
+    text-decoration: none;
+    border: 1px solid var(--border-light);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.back-link:hover {
+    background: #ffffff;
+    color: #0f172a;
+    transform: translateX(-2px);
+}
+
+.page-title h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #E2E8F0;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+}
+
+/* --- Profile Grid --- */
+.profile-grid {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 24px;
+}
+
+.panel-right {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* --- Cards --- */
+.profile-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-xl);
+    padding: 32px;
+    box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: box-shadow 0.25s ease, transform 0.25s ease;
+    animation: fadeInUp 0.4s ease both;
+}
+
+.profile-card:hover {
+    box-shadow: var(--shadow-card-hover), inset 0 1px 0 rgba(255,255,255,0.5);
+    transform: translateY(-1px);
+}
+
+.panel-left { animation-delay: 0.05s; }
+.subscription-card { animation-delay: 0.1s; }
+.personal-info-card { animation-delay: 0.15s; }
+
+/* --- Left Panel: Summary --- */
+.profile-summary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.profile-avatar {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--bg-card);
+    box-shadow: 0 4px 12px rgba(17,26,58,0.1);
+    margin-bottom: 16px;
+}
+
+.profile-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.profile-role {
+    padding: 4px 14px;
+    border-radius: 999px;
+    background: var(--brand-indigo);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+}
+
+.profile-info-list {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* --- Info Cards --- */
+.profile-info-card {
+    background: var(--bg-hover);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+    text-align: left;
+    transition: background 0.2s ease;
+}
+
+.profile-info-card:hover {
+    background: #f0f2f7;
+}
+
+.info-label {
+    color: var(--text-tertiary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.info-value {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+
+/* --- Right Panel: Subscription --- */
+.subscription-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: 24px 32px;
+}
+
+.subscription-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.subscription-label {
+    color: var(--text-primary);
+    font-size: 1.1rem;
     font-weight: 700;
 }
-.back-link:hover {
-    background: #3949ab;
+
+.subscription-badge {
+    padding: 6px 16px;
+    border-radius: 999px;
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
 }
-@media (max-width: 900px) {
+
+.subscription-validity {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.subscription-valid-label {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.subscription-valid-date {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+/* --- Right Panel: Personal Info --- */
+.personal-info-card h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.personal-info-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.phone-code {
+    color: var(--text-secondary);
+}
+
+.phone-separator {
+    color: var(--border-light);
+    margin: 0 8px;
+}
+
+.phone-number {
+    color: var(--text-primary);
+}
+
+/* --- Animations --- */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* --- Responsive --- */
+@media (max-width: 1024px) {
+    .page-wrap {
+        padding: 20px 20px 40px;
+    }
+    .profile-grid {
+        grid-template-columns: 300px 1fr;
+        gap: 20px;
+    }
+}
+
+@media (max-width: 768px) {
     .header {
-        padding: 16px 20px;
+        padding: 0 16px;
+        height: 56px;
     }
     .page-wrap {
-        padding: 18px 20px;
+        padding: 16px 14px 32px;
     }
     .profile-grid {
         grid-template-columns: 1fr;
     }
-    .panel-right {
-        grid-template-rows: auto;
+    .subscription-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    .subscription-validity {
+        align-items: flex-start;
+    }
+    .personal-info-list {
+        grid-template-columns: 1fr;
+    }
+    .back-link {
+        width: 40px;
+        padding: 0;
+    }
+    .back-link span {
+        display: none;
     }
 }

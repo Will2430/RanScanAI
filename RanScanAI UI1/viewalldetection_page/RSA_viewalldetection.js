@@ -1,92 +1,137 @@
-// view all detections page
+// view all detections page — connected to backend API
 
-const api = {
-    getDetectionsCount: () => Promise.resolve({ count: 14 })
-};
+// ── Configuration ──────────────────────────────────────────────
+const API_BASE_URL = 'http://127.0.0.1:8000';   // Change if backend is hosted elsewhere
 
-const detectionNames = [
-    'ransomransom.exe',
-    'encryptor.dll',
-    'shadowcopy.bat',
-    'lockscreen.bin',
-    'payload.ps1',
-    'dropper.tmp',
-    'vaultkey.dat'
-];
+// ── Helpers ────────────────────────────────────────────────────
 
 function padId(value) {
     return `D${String(value).padStart(3, '0')}`;
 }
 
-function formatDateTime(date) {
-    const months = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = months[date.getMonth()];
-    const year = String(date.getFullYear());
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-
-    return `${day} ${month} ${year} ${hours}:${minutes}:${seconds}`;
-}
-
-function randomDateTime() {
-    const now = new Date();
-    const past = new Date();
-    past.setDate(now.getDate() - Math.floor(Math.random() * 30));
-    past.setHours(Math.floor(Math.random() * 24));
-    past.setMinutes(Math.floor(Math.random() * 60));
-    past.setSeconds(Math.floor(Math.random() * 60));
-
-    return {
-        date: past,
-        display: formatDateTime(past)
-    };
-}
-
-function buildDetectionRows(count) {
-    const rows = [];
-    for (let i = 1; i <= count; i += 1) {
-        const detection = detectionNames[Math.floor(Math.random() * detectionNames.length)];
-        const dateInfo = randomDateTime();
-        rows.push({
-            id: padId(i),
-            detection,
-            date: dateInfo.date,
-            display: dateInfo.display
-        });
-    }
-    return rows;
-}
-
 function renderDetectionRows(rows) {
     const tbody = document.getElementById('detections-tbody');
     tbody.innerHTML = '';
-    rows.forEach(row => {
+
+    if (rows.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="3" style="text-align:center;padding:48px 16px;color:#8B92A8;">
+            <div style="font-size:1.1rem;font-weight:600;margin-bottom:6px;">No Detection Events Yet</div>
+            <div style="font-size:.82rem;">Scan files using the browser extension or API to see results here.</div>
+        </td>`;
+        tbody.appendChild(tr);
+        return;
+    }
+
+    rows.forEach((row, index) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${row.id}</td>
-            <td>${row.detection}</td>
-            <td>${row.display}</td>
+            <td>${padId(row.id)}</td>
+            <td>${row.file_name}</td>
+            <td>${row.display_time}</td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-async function populateDetections() {
-    const detections = await api.getDetectionsCount();
-    const countEl = document.getElementById('detections-count');
-    countEl.innerHTML =
-        `<span class="detections-count">${detections.count}</span>` +
-        `<span class="detections-sub">New Detections</span>`;
+let allRows = [];
+let sortDirection = 'none'; // 'none' | 'asc' | 'desc'
 
-    const allRows = buildDetectionRows(detections.count);
-    renderDetectionRows(allRows);
+function updateSortIcon() {
+    const icon = document.getElementById('sort-icon');
+    const header = document.getElementById('sort-date-header');
+    if (!icon) return;
+    if (sortDirection === 'asc') {
+        icon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+        header.classList.add('active');
+        header.setAttribute('aria-sort', 'ascending');
+    } else if (sortDirection === 'desc') {
+        icon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`;
+        header.classList.add('active');
+        header.setAttribute('aria-sort', 'descending');
+    } else {
+        icon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>`;
+        header.classList.remove('active');
+        header.setAttribute('aria-sort', 'none');
+    }
 }
 
+function toggleDateSort() {
+    if (sortDirection === 'none' || sortDirection === 'desc') {
+        sortDirection = 'asc';
+    } else {
+        sortDirection = 'desc';
+    }
+    updateSortIcon();
+    renderDetectionRows(getSortedRows());
+}
+
+function getSortedRows() {
+    const rows = [...allRows];
+    if (sortDirection === 'asc') {
+        rows.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    } else if (sortDirection === 'desc') {
+        rows.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    }
+    return rows;
+}
+
+// ── Fetch from API ─────────────────────────────────────────────
+
+async function fetchDetections() {
+    const countEl = document.getElementById('detections-count');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/detections`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // Update the count metric
+        countEl.innerHTML =
+            `<span class="detections-count">${data.count}</span>` +
+            `<span class="detections-sub">New Detections</span>`;
+
+        // Store rows for sorting
+        allRows = data.detections;
+
+        // Render (API already returns newest-first)
+        renderDetectionRows(allRows);
+
+    } catch (error) {
+        console.error('Failed to fetch detections:', error);
+
+        // Show friendly error in the UI
+        countEl.innerHTML =
+            `<span class="detections-count">—</span>` +
+            `<span class="detections-sub">Unable to load detections</span>`;
+
+        const tbody = document.getElementById('detections-tbody');
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="3" style="text-align:center;padding:32px;color:#C83A2B;">
+                    Could not connect to the server.<br>
+                    <small style="color:#8B92A8;">Make sure the backend is running at ${API_BASE_URL}</small>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+// ── Initialise ─────────────────────────────────────────────────
+
 document.addEventListener('DOMContentLoaded', () => {
-    populateDetections();
+    fetchDetections();
+
+    const sortHeader = document.getElementById('sort-date-header');
+    sortHeader.addEventListener('click', toggleDateSort);
+    sortHeader.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleDateSort();
+        }
+    });
 });

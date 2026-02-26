@@ -63,6 +63,28 @@ except Exception as e:
     traceback.print_exc()
     auth_router = None
 
+# Import detection routes
+try:
+    from detection_routes import router as detection_router
+    logger.info("✓ Detection routes imported successfully")
+except ImportError as e:
+    logger.warning(f"Detection routes import failed: {e}")
+    detection_router = None
+except Exception as e:
+    logger.warning(f"Unexpected error importing detection routes: {e}")
+    detection_router = None
+
+# Import report routes
+try:
+    from report_routes import router as report_router
+    logger.info("✓ Report routes imported successfully")
+except ImportError as e:
+    logger.warning(f"Report routes import failed: {e}")
+    report_router = None
+except Exception as e:
+    logger.warning(f"Unexpected error importing report routes: {e}")
+    report_router = None
+
 # Configuration
 # Toggle between Traditional ML and CNN model
 USE_CNN_MODEL = os.getenv("USE_CNN_MODEL", "false").lower() == "true"  # Set to "true" to enable CNN
@@ -94,6 +116,20 @@ if auth_router:
     logger.info("✓ Authentication routes registered")
 else:
     logger.warning("⚠️ Authentication routes NOT registered - auth_router is None")
+
+# Include detection routes
+if detection_router:
+    app.include_router(detection_router)
+    logger.info("✓ Detection routes registered at /api/detections")
+else:
+    logger.warning("⚠️ Detection routes NOT registered")
+
+# Include report routes
+if report_router:
+    app.include_router(report_router)
+    logger.info("✓ Report routes registered at /api/reports")
+else:
+    logger.warning("⚠️ Report routes NOT registered")
 
 # Global instances
 detector: Optional[MalwareDetector] = None
