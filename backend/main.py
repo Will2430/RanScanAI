@@ -3,7 +3,7 @@ SecureGuard Backend - Privacy-First Malware Detection API
 FastAPI server for local malware scanning with ML model
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -45,11 +45,15 @@ except ImportError as e:
 
 from vt_integration import VirusTotalEnricher
 
+# Import database functions
+from db_manager import get_session, save_scan_history, get_scan_history, User
+from sqlalchemy.ext.asyncio import AsyncSession
+
 
 # Import authentication router
 try:
     logger.info("Attempting to import auth_routes...")
-    from auth import auth_router
+    from auth import auth_router, get_current_user, get_current_admin
     logger.info(f"✓ Auth routes imported successfully (router type: {type(auth_router)})")
 except ImportError as e:
     logger.error(f"❌ Auth routes import failed (ImportError): {e}")
@@ -57,11 +61,15 @@ except ImportError as e:
     import traceback
     traceback.print_exc()
     auth_router = None
+    get_current_user = None
+    get_current_admin = None
 except Exception as e:
     logger.error(f"❌ Unexpected error importing auth routes: {e}")
     import traceback
     traceback.print_exc()
     auth_router = None
+    get_current_user = None
+    get_current_admin = None
 
 # Import detection routes
 try:
@@ -155,6 +163,28 @@ class ScanResponse(BaseModel):
     privacy_note: str = "Scan performed locally - no data uploaded"
 
 
+class ScanHistoryResponse(BaseModel):
+    """Response model for scan history records"""
+    id: int
+    timestamp: str
+    file_name: str
+    file_path: str
+    is_malicious: bool
+    confidence: float
+    prediction_label: str
+    model_type: str
+    scan_time_ms: float
+    
+    class Config:
+        from_attributes = True  # For Pydantic v2 ORM compatibility
+
+
+class ScanHistoryListResponse(BaseModel):
+    """Response model for scan history list with count"""
+    count: int
+    scans: list[ScanHistoryResponse]
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize ML model and services on startup"""
@@ -227,12 +257,18 @@ async def health_check():
 
 
 @app.post("/scan", response_model=ScanResponse)
-async def scan_file(request: ScanRequest):
+async def scan_file(
+    request: ScanRequest,
+    current_user: User = Depends(get_current_user),  # ✨ NEW: Require authentication
+    db: AsyncSession = Depends(get_session)  # ✨ NEW: Database session
+):
     """
-    Scan a file for malware using local ML model
+    Scan a file for malware using local ML model (Authentication Required)
     
     Args:
         request: ScanRequest with file path and options
+        current_user: Authenticated user (injected by dependency)
+        db: Database session
         
     Returns:
         ScanResponse with detection results
@@ -248,7 +284,7 @@ async def scan_file(request: ScanRequest):
         if not Path(request.file_path).exists():
             raise HTTPException(status_code=404, detail="File not found")
         
-        logger.info(f"Scanning file: {request.file_path}")
+        logger.info(f"Scanning file: {request.file_path} (User: {current_user.username})")
         
         # Perform ML scan
         # For CNN: uses staged analysis (PE static + VT enrichment if uncertain)
@@ -267,6 +303,16 @@ async def scan_file(request: ScanRequest):
         # Get features count (different for CNN vs traditional)
         features_count = result.get('file_size', 0) if cnn_detector else result.get('features_count', 0)
         
+        # ✨ NEW: Save scan to database with user_id
+        model_type = "CNN" if cnn_detector else "Traditional ML"
+        await save_scan_history(
+            session=db,
+            file_path=request.file_path,
+            result=result,
+            user_id=current_user.user_id,  # Link scan to user
+            model_type=model_type
+        )
+        
         response = ScanResponse(
             is_malicious=result['is_malicious'],
             confidence=result['confidence'],
@@ -284,14 +330,125 @@ async def scan_file(request: ScanRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/scan-upload", response_model=ScanResponse)
-async def scan_uploaded_file(file: UploadFile = File(...), enable_vt: bool = True):
+@app.get("/scan-history", response_model=ScanHistoryListResponse)
+async def get_my_scan_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session),
+    limit: int = 100,
+    malicious_only: bool = False
+):
     """
-    Scan an uploaded file for malware
+    Get scan history for the current authenticated user
+    
+    Args:
+        current_user: Authenticated user
+        db: Database session  
+        limit: Maximum number of records to return
+        malicious_only: Only return malicious detections
+        
+    Returns:
+        Scan history records with count for the current user
+    """
+    try:
+        scans = await get_scan_history(
+            session=db,
+            limit=limit,
+            user_id=current_user.user_id,  # Filter by current user
+            malicious_only=malicious_only
+        )
+        
+        # Convert to response format
+        scan_list = [
+            ScanHistoryResponse(
+                id=scan.id,
+                timestamp=scan.timestamp.isoformat(),
+                file_name=scan.file_name,
+                file_path=scan.file_path,
+                is_malicious=scan.is_malicious,
+                confidence=scan.confidence,
+                prediction_label=scan.prediction_label,
+                model_type=scan.model_type,
+                scan_time_ms=scan.scan_time_ms
+            )
+            for scan in scans
+        ]
+        
+        return ScanHistoryListResponse(
+            count=len(scan_list),
+            scans=scan_list
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch scan history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/admin/scan-history", response_model=ScanHistoryListResponse)
+async def get_all_scan_history(
+    current_admin: User = Depends(get_current_admin),  # Only admins
+    db: AsyncSession = Depends(get_session),
+    limit: int = 100,
+    malicious_only: bool = False
+):
+    """
+    Get scan history for all users (Admin only)
+    
+    Args:
+        current_admin: Authenticated admin user
+        db: Database session
+        limit: Maximum number of records to return
+        malicious_only: Only return malicious detections
+        
+    Returns:
+        Scan history records with count for all users
+    """
+    try:
+        scans = await get_scan_history(
+            session=db,
+            limit=limit,
+            user_id=None,  # No filter - get all users' scans
+            malicious_only=malicious_only
+        )
+        
+        # Convert to response format
+        scan_list = [
+            ScanHistoryResponse(
+                id=scan.id,
+                timestamp=scan.timestamp.isoformat(),
+                file_name=scan.file_name,
+                file_path=scan.file_path,
+                is_malicious=scan.is_malicious,
+                confidence=scan.confidence,
+                prediction_label=scan.prediction_label,
+                model_type=scan.model_type,
+                scan_time_ms=scan.scan_time_ms
+            )
+            for scan in scans
+        ]
+        
+        return ScanHistoryListResponse(
+            count=len(scan_list),
+            scans=scan_list
+        )
+    except Exception as e:
+        logger.error(f"Failed to fetch scan history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/scan-upload", response_model=ScanResponse)
+async def scan_uploaded_file(
+    file: UploadFile = File(...),
+    enable_vt: bool = True,
+    current_user: User = Depends(get_current_user),  # ✨ NEW: Require authentication
+    db: AsyncSession = Depends(get_session)  # ✨ NEW: Database session
+):
+    """
+    Scan an uploaded file for malware (Authentication Required)
     
     Args:
         file: Uploaded file from browser
         enable_vt: Enable VirusTotal enrichment for threats
+        current_user: Authenticated user (injected by dependency)
+        db: Database session
         
     Returns:
         ScanResponse with detection results
@@ -315,7 +472,7 @@ async def scan_uploaded_file(file: UploadFile = File(...), enable_vt: bool = Tru
             content = await file.read()
             f.write(content)
         
-        logger.info(f"Scanning uploaded file: {file.filename} ({len(content)} bytes)")
+        logger.info(f"Scanning uploaded file: {file.filename} ({len(content)} bytes) (User: {current_user.username})")
         
         # Perform scan
         # For CNN: uses staged analysis (PE static + VT enrichment if uncertain)
@@ -330,6 +487,16 @@ async def scan_uploaded_file(file: UploadFile = File(...), enable_vt: bool = Tru
             logger.info("File flagged as malicious - enriching with VirusTotal...")
             vt_enrichment = vt_enricher.check_file(str(temp_path))
             vt_data = vt_enrichment.get('detection') if vt_enrichment else None
+        
+        # ✨ NEW: Save scan to database with user_id
+        model_type = "CNN" if cnn_detector else "Traditional ML"
+        await save_scan_history(
+            session=db,
+            file_path=str(temp_path),
+            result=result,
+            user_id=current_user.user_id,  # Link scan to user
+            model_type=model_type
+        )
         
         # Clean up temp file
         if temp_path and temp_path.exists():
