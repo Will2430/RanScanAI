@@ -48,6 +48,4 @@ testing_code/vm_related/VM_Testing_Package_20260210_020538/ransomware_simulator.
 **/venv/
 **/env/
 **/.env
-**/Credentials
-**/*.key
-**/*.pem
+**/node_modules/
