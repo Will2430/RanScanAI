@@ -122,6 +122,10 @@ class ScanHistory(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     
+    # User relationship - links scan to the user who performed it
+    user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    user: Mapped["User"] = relationship("User", back_populates="scans")
+    
     # File information
     file_path: Mapped[str] = mapped_column(String(1000))
     file_name: Mapped[str] = mapped_column(String(255), index=True)
@@ -231,6 +235,9 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    # Relationship: user's scan history
+    scans: Mapped[list["ScanHistory"]] = relationship("ScanHistory", back_populates="user", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User {self.user_id}: {self.username} ({self.role})>"
@@ -422,6 +429,7 @@ async def save_scan_history(
     session: AsyncSession,
     file_path: str,
     result: Dict[str, Any],
+    user_id: uuid.UUID,  # ✨ NEW: Required user_id
     model_type: str = "Traditional ML",
     file_hash: Optional[str] = None
 ) -> ScanHistory:
@@ -439,6 +447,7 @@ async def save_scan_history(
             - features_count or file_size (int)
             - vt_detection_ratio (optional str)
             - vt_data (optional dict)
+        user_id: UUID of the user performing the scan
         model_type: "CNN" or "Traditional ML"
         file_hash: Optional SHA256 hash of file
     
@@ -448,6 +457,7 @@ async def save_scan_history(
     from pathlib import Path
     
     scan_entry = ScanHistory(
+        user_id=user_id,  # ✨ NEW: Set user_id
         file_path=file_path,
         file_name=Path(file_path).name,
         file_size=result.get('file_size', result.get('features_count', 0)),
@@ -466,7 +476,7 @@ async def save_scan_history(
     await session.commit()
     await session.refresh(scan_entry)
     
-    logger.debug(f"Saved scan history: {scan_entry.id}")
+    logger.debug(f"Saved scan history: {scan_entry.id} for user: {user_id}")
     return scan_entry
 
 async def save_behavioral_patterns(
@@ -550,6 +560,7 @@ async def get_recent_logs(
 async def get_scan_history(
     session: AsyncSession,
     limit: int = 100,
+    user_id: Optional[uuid.UUID] = None,  # ✨ NEW: Filter by user_id
     malicious_only: bool = False,
     file_hash: Optional[str] = None
 ) -> list[ScanHistory]:
@@ -559,6 +570,7 @@ async def get_scan_history(
     Args:
         session: Database session
         limit: Maximum number of scans to return
+        user_id: Filter by specific user (optional - for admin viewing all scans, pass None)
         malicious_only: Only return malware detections
         file_hash: Filter by specific file hash
     
@@ -568,6 +580,9 @@ async def get_scan_history(
     from sqlalchemy import select, desc
     
     stmt = select(ScanHistory).order_by(desc(ScanHistory.timestamp)).limit(limit)
+    
+    if user_id:  # ✨ NEW: Filter by user_id if provided
+        stmt = stmt.where(ScanHistory.user_id == user_id)
     
     if malicious_only:
         stmt = stmt.where(ScanHistory.is_malicious == True)
