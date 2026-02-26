@@ -402,6 +402,156 @@ select:disabled {
 }
 
 /* ============================================================================
+   Phone Input Wrapper
+   ============================================================================ */
+
+.phone-input-wrapper {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--divider);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    transition: all var(--transition-fast);
+    overflow: visible;
+}
+
+.phone-input-wrapper:focus-within {
+    border-color: var(--primary-light);
+    box-shadow: 0 0 0 3px rgba(63, 81, 181, 0.1);
+}
+
+.country-picker {
+    position: relative;
+    flex: 0 0 auto;
+    display: flex;
+}
+
+.country-picker-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
+    padding: var(--spacing-md) 10px;
+    border: none;
+    border-right: 1px solid var(--divider);
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+    background: var(--background);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--transition-fast);
+    min-width: 110px;
+}
+
+.country-picker-btn:hover {
+    background: rgba(63, 81, 181, 0.05);
+}
+
+.country-picker-btn:focus {
+    outline: none;
+    background: rgba(63, 81, 181, 0.05);
+}
+
+.country-picker-arrow {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-left: auto;
+}
+
+.country-picker-dropdown {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    width: 260px;
+    overflow: hidden;
+}
+
+.country-picker-dropdown.open {
+    display: block;
+}
+
+.country-search-wrap {
+    padding: 8px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.country-search-input {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--divider);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-family: inherit;
+    background: var(--background);
+    color: var(--text-primary);
+    box-sizing: border-box;
+}
+
+.country-search-input:focus {
+    outline: none;
+    border-color: var(--primary-light);
+}
+
+.country-picker-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.country-picker-list li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    transition: background var(--transition-fast);
+}
+
+.country-picker-list li:hover,
+.country-picker-list li.active {
+    background: rgba(63, 81, 181, 0.08);
+}
+
+.country-picker-list li .dial-code {
+    margin-left: auto;
+    font-weight: 600;
+    color: var(--primary-light);
+    font-size: 0.85rem;
+}
+
+.country-picker-list .no-results {
+    padding: 12px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: default;
+}
+
+.country-picker-list .no-results:hover {
+    background: none;
+}
+
+.phone-number-input {
+    flex: 1;
+    border: none !important;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+    padding: var(--spacing-md);
+}
+
+/* ============================================================================
    Password Input Wrapper
    ============================================================================ */
 
@@ -1440,3 +1590,5 @@ select {
         display: none;
     }
 }
+
+

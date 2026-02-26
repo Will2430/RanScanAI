@@ -3,46 +3,21 @@
  * Handles multi-step form, validation, and API integration
  */
 
+// Disable browser scroll restoration so we control it on load
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+
 // Configuration
 const API_BASE_URL = 'http://localhost:8000';
 const CURRENT_STEP = { value: 1 };
-const TOTAL_STEPS = 3;
-
-// Role permissions mapping
-const ROLE_PERMISSIONS = {
-    analyst: {
-        name: 'Security Analyst',
-        description: 'Full analysis and reporting capabilities. Can scan files, generate reports, and access detailed threat intelligence.',
-        permissions: ['File Scanning', 'Report Generation', 'Threat Analysis', 'Alert Management']
-    },
-    operator: {
-        name: 'System Operator',
-        description: 'Operational tasks and monitoring. Can perform scans, monitor system health, and manage alerts.',
-        permissions: ['File Scanning', 'System Monitoring', 'Alert Management', 'Log Access']
-    },
-    manager: {
-        name: 'Manager',
-        description: 'Oversight and user management. Can manage users, view reports, and access admin features.',
-        permissions: ['User Management', 'Report Access', 'Team Administration', 'Settings Access']
-    },
-    developer: {
-        name: 'Developer',
-        description: 'Development and testing access. Can test features, access APIs, and perform testing operations.',
-        permissions: ['API Access', 'Testing Capabilities', 'Development Tools', 'Debug Access']
-    },
-    viewer: {
-        name: 'Viewer (Read-Only)',
-        description: 'Read-only access to the system. Can view reports and data but cannot perform actions.',
-        permissions: ['Report Viewing', 'Data Access', 'Dashboard View', 'Read-Only Access']
-    }
-};
+const TOTAL_STEPS = 2;
 
 // Form cache
 const form = document.getElementById('registrationForm');
 const successMessage = document.getElementById('successMessage');
 const errorMessage = document.getElementById('errorMessage');
 const loadingOverlay = document.getElementById('loadingOverlay');
-const roleSelect = document.getElementById('role');
 const passwordInput = document.getElementById('password');
 
 // ============================================================================
@@ -52,15 +27,148 @@ const passwordInput = document.getElementById('password');
 document.addEventListener('DOMContentLoaded', () => {
     console.log('Registration Portal Loaded');
     
+    // Reset form and scroll to top on every page load/refresh
+    form.reset();
+    CURRENT_STEP.value = 1;
+    document.querySelectorAll('.error-message').forEach(el => el.classList.remove('show'));
+    document.querySelectorAll('.error').forEach(el => el.classList.remove('error'));
+    // Double requestAnimationFrame ensures scroll runs after browser restoration
+    requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, 0)));
+    
     // Setup event listeners
     form.addEventListener('submit', handleFormSubmit);
     form.addEventListener('change', validateField);
     passwordInput.addEventListener('input', updatePasswordStrength);
-    roleSelect.addEventListener('change', updateRoleDescription);
     
     // Initialize
     updateProgressBar();
+    updateStepDisplay();
+    initCountryDropdown();
 });
+
+// Warn user before refresh/close if form has data
+window.addEventListener('beforeunload', (e) => {
+    if (isFormDirty()) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+function isFormDirty() {
+    const fields = ['firstName', 'lastName', 'email', 'phone', 'username', 'password'];
+    return fields.some(id => {
+        const el = document.getElementById(id);
+        return el && el.value.trim() !== '';
+    });
+}
+
+// ============================================================================
+// Country Code Picker
+// ============================================================================
+
+const COUNTRIES = [
+    { flag: '🇲🇾', name: 'Malaysia',        code: '+60'  },
+    { flag: '🇸🇬', name: 'Singapore',       code: '+65'  },
+    { flag: '🇺🇸', name: 'United States',   code: '+1'   },
+    { flag: '🇬🇧', name: 'United Kingdom',  code: '+44'  },
+    { flag: '🇦🇺', name: 'Australia',       code: '+61'  },
+    { flag: '🇯🇵', name: 'Japan',           code: '+81'  },
+    { flag: '🇰🇷', name: 'South Korea',     code: '+82'  },
+    { flag: '🇨🇳', name: 'China',           code: '+86'  },
+    { flag: '🇮🇳', name: 'India',           code: '+91'  },
+    { flag: '🇮🇩', name: 'Indonesia',       code: '+62'  },
+    { flag: '🇹🇭', name: 'Thailand',        code: '+66'  },
+    { flag: '🇵🇭', name: 'Philippines',     code: '+63'  },
+    { flag: '🇻🇳', name: 'Vietnam',         code: '+84'  },
+    { flag: '🇭🇰', name: 'Hong Kong',       code: '+852' },
+    { flag: '🇹🇼', name: 'Taiwan',          code: '+886' },
+    { flag: '🇫🇷', name: 'France',          code: '+33'  },
+    { flag: '🇩🇪', name: 'Germany',         code: '+49'  },
+    { flag: '🇦🇪', name: 'United Arab Emirates', code: '+971' },
+    { flag: '🇸🇦', name: 'Saudi Arabia',    code: '+966' },
+    { flag: '🇧🇷', name: 'Brazil',          code: '+55'  },
+    { flag: '🇨🇦', name: 'Canada',          code: '+1'   },
+    { flag: '🇳🇿', name: 'New Zealand',     code: '+64'  },
+    { flag: '🇵🇰', name: 'Pakistan',        code: '+92'  },
+    { flag: '🇧🇩', name: 'Bangladesh',      code: '+880' },
+    { flag: '🇱🇰', name: 'Sri Lanka',       code: '+94'  },
+    { flag: '🇲🇲', name: 'Myanmar',         code: '+95'  },
+    { flag: '🇰🇭', name: 'Cambodia',        code: '+855' },
+    { flag: '🇱🇦', name: 'Laos',            code: '+856' },
+    { flag: '🇧🇳', name: 'Brunei',          code: '+673' },
+    { flag: '🇲🇴', name: 'Macau',           code: '+853' },
+];
+
+let filteredCountries = [...COUNTRIES];
+
+function initCountryDropdown() {
+    renderCountryList(COUNTRIES);
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+        const picker = document.getElementById('countryPicker');
+        if (picker && !picker.contains(e.target)) {
+            closeCountryDropdown();
+        }
+    });
+}
+
+function renderCountryList(list) {
+    const ul = document.getElementById('countryPickerList');
+    const currentCode = document.getElementById('countryCode').value;
+    if (!ul) return;
+
+    if (list.length === 0) {
+        ul.innerHTML = '<li class="no-results">No countries found</li>';
+        return;
+    }
+
+    ul.innerHTML = list.map(c =>
+        `<li class="${c.code === currentCode ? 'active' : ''}" onclick="selectCountry('${c.code}', '${c.flag} ${c.code}')">
+            <span>${c.flag}</span>
+            <span>${c.name}</span>
+            <span class="dial-code">${c.code}</span>
+        </li>`
+    ).join('');
+}
+
+function toggleCountryDropdown() {
+    const dropdown = document.getElementById('countryPickerDropdown');
+    const isOpen = dropdown.classList.contains('open');
+    if (isOpen) {
+        closeCountryDropdown();
+    } else {
+        // Position relative to button using fixed coordinates
+        const btn = document.getElementById('countryPickerBtn');
+        const rect = btn.getBoundingClientRect();
+        dropdown.style.top = (rect.bottom + 4) + 'px';
+        dropdown.style.left = rect.left + 'px';
+        dropdown.classList.add('open');
+        const search = document.getElementById('countrySearch');
+        search.value = '';
+        filterCountries();
+        setTimeout(() => search.focus(), 50);
+    }
+}
+
+function closeCountryDropdown() {
+    const dropdown = document.getElementById('countryPickerDropdown');
+    if (dropdown) dropdown.classList.remove('open');
+}
+
+function filterCountries() {
+    const query = document.getElementById('countrySearch').value.toLowerCase().trim();
+    filteredCountries = COUNTRIES.filter(c =>
+        c.name.toLowerCase().includes(query) || c.code.includes(query)
+    );
+    renderCountryList(filteredCountries);
+}
+
+function selectCountry(code, display) {
+    document.getElementById('countryCode').value = code;
+    document.getElementById('countryPickerDisplay').textContent = display;
+    closeCountryDropdown();
+}
 
 // ============================================================================
 // Multi-Step Form Navigation
@@ -116,8 +224,7 @@ function updateProgressBar() {
 function validateCurrentStep() {
     const fieldsToValidate = {
         1: ['firstName', 'lastName', 'email', 'phone'],
-        2: ['username', 'password', 'confirmPassword'],
-        3: ['role']
+        2: ['username', 'password', 'confirmPassword']
     };
     
     const fields = fieldsToValidate[CURRENT_STEP.value];
@@ -153,7 +260,6 @@ function getValidatorForField(fieldId) {
         username: validateUsername,
         password: validatePassword,
         confirmPassword: validateConfirmPassword,
-        role: validateRole,
         phone: validatePhone
     };
     return validators[fieldId];
@@ -221,9 +327,9 @@ function validatePhone() {
         return true; // Optional
     }
     
-    const phoneRegex = /^[\d\s\-+()]+$/;
-    if (!phoneRegex.test(value) || value.replace(/\D/g, '').length < 10) {
-        showError('phone', 'Please enter a valid phone number');
+    const phoneRegex = /^[\d\s\-]+$/;
+    if (!phoneRegex.test(value) || value.replace(/\D/g, '').length < 7 || value.replace(/\D/g, '').length > 15) {
+        showError('phone', 'Please enter a valid phone number (7-15 digits)');
         return false;
     }
     clearError('phone');
@@ -293,17 +399,6 @@ function validateConfirmPassword() {
         return false;
     }
     clearError('confirmPassword');
-    return true;
-}
-
-function validateRole() {
-    const value = document.getElementById('role').value;
-    
-    if (!value) {
-        showError('role', 'Please select a role');
-        return false;
-    }
-    clearError('role');
     return true;
 }
 
@@ -378,26 +473,6 @@ function updatePasswordStrength() {
     strengthContainer.innerHTML = html;
 }
 
-function updateRoleDescription() {
-    const selectedRole = roleSelect.value;
-    const descElement = document.getElementById('roleDescription');
-    const permsList = document.getElementById('permissionsList');
-    
-    if (!selectedRole) {
-        descElement.textContent = '';
-        permsList.innerHTML = '<li>Select a role to view permissions</li>';
-        return;
-    }
-    
-    const roleData = ROLE_PERMISSIONS[selectedRole];
-    if (roleData) {
-        descElement.textContent = roleData.description;
-        permsList.innerHTML = roleData.permissions
-            .map(perm => `<li>${perm}</li>`)
-            .join('');
-    }
-}
-
 // ============================================================================
 // Form Submission
 // ============================================================================
@@ -422,14 +497,13 @@ async function handleFormSubmit(e) {
             email: document.getElementById('email').value.trim().toLowerCase(),
             username: document.getElementById('username').value.trim(),
             password: document.getElementById('password').value,
-            phone_number: document.getElementById('phone').value.trim() || null,
-            role: document.getElementById('role').value,
-            department: document.getElementById('department').value.trim() || null
+            phone_number: getFullPhoneNumber() || null,
+            role: 'user'
         };
         
         console.log('Submitting registration data');
         
-        const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        const response = await fetch(`${API_BASE_URL}/api/auth/admin/create-user`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -447,7 +521,7 @@ async function handleFormSubmit(e) {
         console.log('Registration successful');
         showSuccess(
             'User account created successfully!',
-            `Username: ${formData.username}\nEmail: ${formData.email}\nRole: ${formData.role}`
+            `Username: ${formData.username}\nEmail: ${formData.email}\nRole: User`
         );
         
         form.reset();
@@ -474,8 +548,7 @@ function validateAllFields() {
            validateEmail() && 
            validateUsername() && 
            validatePassword() && 
-           validateConfirmPassword() && 
-           validateRole();
+           validateConfirmPassword();
 }
 
 // ============================================================================
@@ -512,6 +585,13 @@ function showLoading(show) {
 function togglePasswordVisibility(fieldId) {
     const field = document.getElementById(fieldId);
     field.type = field.type === 'password' ? 'text' : 'password';
+}
+
+function getFullPhoneNumber() {
+    const phone = document.getElementById('phone').value.trim();
+    if (!phone) return '';
+    const countryCode = document.getElementById('countryCode').value;
+    return countryCode + phone.replace(/^0+/, ''); // strip leading zero
 }
 
 function getAuthToken() {

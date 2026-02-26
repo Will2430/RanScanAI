@@ -46,7 +46,7 @@
                     <p>System Provider Portal - Create new user account</p>
                 </div>
                 <div class="form-progress">
-                    <span class="progress-label">Step <span id="currentStep">1</span> of 3</span>
+                    <span class="progress-label">Step <span id="currentStep">1</span> of 2</span>
                     <div class="progress-bar">
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
@@ -103,12 +103,28 @@
 
                         <div class="form-group">
                             <label for="phone">Phone Number</label>
-                            <input 
-                                type="tel" 
-                                id="phone" 
-                                name="phone" 
-                                placeholder="+1 (555) 000-0000"
-                            >
+                            <div class="phone-input-wrapper">
+                                <input type="hidden" id="countryCode" value="+60">
+                                <div class="country-picker" id="countryPicker">
+                                    <button type="button" class="country-picker-btn" id="countryPickerBtn" onclick="toggleCountryDropdown()">
+                                        <span id="countryPickerDisplay">🇲🇾 +60</span>
+                                        <span class="country-picker-arrow">&#9662;</span>
+                                    </button>
+                                    <div class="country-picker-dropdown" id="countryPickerDropdown">
+                                        <div class="country-search-wrap">
+                                            <input type="text" id="countrySearch" class="country-search-input" placeholder="&#128269; Search country..." oninput="filterCountries()" autocomplete="off">
+                                        </div>
+                                        <ul class="country-picker-list" id="countryPickerList"></ul>
+                                    </div>
+                                </div>
+                                <input 
+                                    type="tel" 
+                                    id="phone" 
+                                    name="phone" 
+                                    placeholder="12 345 6789"
+                                    class="phone-number-input"
+                                >
+                            </div>
                             <span class="error-message" id="phoneError"></span>
                         </div>
                     </div>
@@ -170,47 +186,7 @@
                         </div>
                     </div>
 
-                    <!-- Step 3: Role Assignment -->
-                    <div class="form-step" data-step="3">
-                        <div class="step-header">
-                            <h3>Role & Permissions</h3>
-                            <p>Assign user role and access level</p>
-                        </div>
 
-                        <div class="form-group">
-                            <label for="role">User Role <span class="required">*</span></label>
-                            <select id="role" name="role" required>
-                                <option value="">-- Select a role --</option>
-                                <option value="analyst">Security Analyst</option>
-                                <option value="operator">System Operator</option>
-                                <option value="manager">Manager</option>
-                                <option value="developer">Developer</option>
-                                <option value="viewer">Viewer (Read-Only)</option>
-                            </select>
-                            <span class="role-description" id="roleDescription"></span>
-                            <span class="error-message" id="roleError"></span>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Department</label>
-                            <input 
-                                type="text" 
-                                id="department" 
-                                name="department" 
-                                placeholder="e.g., Cybersecurity, IT Operations"
-                            >
-                        </div>
-
-                        <div class="permissions-summary">
-                            <div class="summary-title">
-                                <span class="shield-icon">🛡️</span>
-                                <strong>Role Permissions</strong>
-                            </div>
-                            <ul id="permissionsList">
-                                <li>Select a role to view permissions</li>
-                            </ul>
-                        </div>
-                    </div>
 
                     <!-- Form Actions -->
                     <div class="form-actions">
