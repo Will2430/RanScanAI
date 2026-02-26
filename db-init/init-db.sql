@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS Registrations (
     company_email TEXT
 );
 
--- Users table
+-- Users table (modified for authentication system)
 CREATE TABLE IF NOT EXISTS users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username TEXT UNIQUE NOT NULL,
@@ -58,10 +58,33 @@ CREATE TABLE IF NOT EXISTS users (
     phone_number TEXT UNIQUE,
     password_hash TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT true,
-    role TEXT NOT NULL DEFAULT 'developer',
+    role TEXT NOT NULL DEFAULT 'user',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    last_login TIMESTAMP WITH TIME ZONE
 );
+
+-- Create indexes for faster lookups
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
+
+-- Insert default admin account
+-- Username: admin
+-- Password: admin123 (CHANGE THIS IN PRODUCTION!)
+-- Password hash generated with bcrypt (12 rounds)
+INSERT INTO users (username, email, password_hash, first_name, last_name, role, is_active)
+VALUES (
+    'admin',
+    'admin@ranscanai.com',
+    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5agyWcK8JTW5i',  -- password: admin123
+    'Admin',
+    'User',
+    'admin',
+    true
+)
+ON CONFLICT (username) DO NOTHING;
 
 -- Devices table
 CREATE TABLE IF NOT EXISTS Devices (

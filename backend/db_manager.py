@@ -4,12 +4,14 @@ Handles connections, ORM models, and CRUD operations for terminal logs
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, Integer, Boolean, JSON
+from sqlalchemy import String, Text, DateTime, Integer, Boolean, JSON, text
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from datetime import datetime
 from typing import Optional, Dict, Any
 from pathlib import Path
 import os
 import logging
+import uuid
 
 # Load environment variables from .env file in same directory as this file
 try:
@@ -184,6 +186,39 @@ class UncertainSampleQueue(Base):
     
     def __repr__(self):
         return f"<UncertainSampleQueue {self.id}: {self.file_hash[:8]}... - {self.status}>"
+
+
+class User(Base):
+    """
+    User authentication table for admin and user roles
+    Admin can create users, both admin and users can login
+    """
+    __tablename__ = "users"
+    
+    # Primary key (using UUID type to match database)
+    user_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    
+    # Authentication
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)  # bcrypt hash
+    
+    # User information
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    phone_number: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    
+    # Role and status
+    role: Mapped[str] = mapped_column(String(20), default="user", index=True)  # "admin" or "user"
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    
+    def __repr__(self):
+        return f"<User {self.user_id}: {self.username} ({self.role})>"
 
 
 class FeedbackSamples(Base):
