@@ -3,8 +3,8 @@ Database manager for Azure PostgreSQL
 Handles connections, ORM models, and CRUD operations for terminal logs
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Text, DateTime, Integer, Boolean, JSON
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import String, Text, DateTime, Integer, Boolean, JSON, ForeignKey
 from datetime import datetime
 from typing import Optional, Dict, Any
 from pathlib import Path
@@ -99,7 +99,11 @@ class TerminalLog(Base):
     file_path: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     user_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     session_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    
+
+    # FK to parent scan (nullable — non-scan logs like health checks have no scan)
+    scan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("scan_history.id", ondelete="SET NULL"), nullable=True, index=True)
+    scan: Mapped[Optional["ScanHistory"]] = relationship("ScanHistory", back_populates="terminal_logs")
+
     def __repr__(self):
         return f"<TerminalLog {self.id}: {self.command_type} at {self.timestamp}>"
 
@@ -135,7 +139,13 @@ class ScanHistory(Base):
     vt_detection_ratio: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     # Example: "45/70" means 45 out of 70 engines detected it
     vt_data: Mapped[Optional[Dict]] = mapped_column(JSON, nullable=True)
-    
+
+    # Relationships to child tables (one scan → many related records)
+    terminal_logs: Mapped[list["TerminalLog"]] = relationship("TerminalLog", back_populates="scan", cascade="all, delete-orphan", passive_deletes=True)
+    uncertain_samples: Mapped[list["UncertainSampleQueue"]] = relationship("UncertainSampleQueue", back_populates="scan", cascade="all, delete-orphan", passive_deletes=True)
+    feedback_samples: Mapped[list["FeedbackSamples"]] = relationship("FeedbackSamples", back_populates="scan", passive_deletes=True)
+    behavioral_patterns: Mapped[list["BehavioralPatterns"]] = relationship("BehavioralPatterns", back_populates="scan", cascade="all, delete-orphan", passive_deletes=True)
+
     def __repr__(self):
         return f"<ScanHistory {self.id}: {self.file_name} - {'MALWARE' if self.is_malicious else 'BENIGN'}>"
 
@@ -181,7 +191,11 @@ class UncertainSampleQueue(Base):
     
     # Status: PENDING, UPLOADING, SCANNING, VALIDATED, FAILED
     status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
-    
+
+    # FK to parent scan
+    scan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("scan_history.id", ondelete="SET NULL"), nullable=True, index=True)
+    scan: Mapped[Optional["ScanHistory"]] = relationship("ScanHistory", back_populates="uncertain_samples")
+
     def __repr__(self):
         return f"<UncertainSampleQueue {self.id}: {self.file_hash[:8]}... - {self.status}>"
 
@@ -228,14 +242,54 @@ class FeedbackSamples(Base):
     
     # Features for retraining (serialized JSON)
     features_json: Mapped[str] = mapped_column(Text)
-    
+
+    # FK to parent scan (nullable — feedback can be created from VT async job without a live scan)
+    scan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("scan_history.id", ondelete="SET NULL"), nullable=True, index=True)
+    scan: Mapped[Optional["ScanHistory"]] = relationship("ScanHistory", back_populates="feedback_samples")
+
     def __repr__(self):
         return f"<FeedbackSamples {self.id}: {self.mismatch_type} - {self.severity}>"
 
 
-# ============================================================================
-# DATABASE OPERATIONS
-# ============================================================================
+class BehavioralPatterns(Base):
+    """
+    Stores ransomware/malware behavioral patterns detected during sandbox analysis.
+    One row per scan — each boolean column represents a detected pattern.
+    """
+    __tablename__ = "behavioral_patterns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # Link back to the scan that produced these patterns
+    file_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    detection_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    # Pattern flags (all from vm_complete_analyzer detect_patterns)
+    mass_file_encryption: Mapped[bool] = mapped_column(Boolean, default=False)
+    shadow_copy_deletion: Mapped[bool] = mapped_column(Boolean, default=False)
+    registry_persistence: Mapped[bool] = mapped_column(Boolean, default=False)
+    network_c2_communication: Mapped[bool] = mapped_column(Boolean, default=False)
+    ransom_note_creation: Mapped[bool] = mapped_column(Boolean, default=False)
+    mass_file_deletion: Mapped[bool] = mapped_column(Boolean, default=False)
+    suspicious_process_creation: Mapped[bool] = mapped_column(Boolean, default=False)
+    api_encrypt_rename_sequence: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Aggregate
+    total_patterns_detected: Mapped[int] = mapped_column(Integer, default=0)
+    risk_score: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    # Full patterns dict for future-proofing
+    raw_patterns: Mapped[Optional[Dict]] = mapped_column(JSON, nullable=True)
+
+    # FK to parent scan
+    scan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("scan_history.id", ondelete="SET NULL"), nullable=True, index=True)
+    scan: Mapped[Optional["ScanHistory"]] = relationship("ScanHistory", back_populates="behavioral_patterns")
+
+    def __repr__(self):
+        return f"<BehavioralPatterns {self.id}: {self.file_name} - {self.total_patterns_detected} patterns>"
+
 
 async def init_db():
     """
@@ -283,7 +337,8 @@ async def save_terminal_log(
     scan_result: Optional[Dict[str, Any]] = None,
     file_path: Optional[str] = None,
     user_id: Optional[str] = None,
-    session_id: Optional[str] = None
+    session_id: Optional[str] = None,
+    scan_id: Optional[int] = None,
 ) -> TerminalLog:
     """
     Save a terminal log entry to database
@@ -315,7 +370,8 @@ async def save_terminal_log(
         scan_result=scan_result,
         file_path=file_path,
         user_id=user_id,
-        session_id=session_id
+        session_id=session_id,
+        scan_id=scan_id,
     )
     
     session.add(log_entry)
@@ -377,6 +433,51 @@ async def save_scan_history(
     logger.debug(f"Saved scan history: {scan_entry.id}")
     return scan_entry
 
+async def save_behavioral_patterns(
+    session: AsyncSession,
+    patterns: Dict[str, bool],
+    file_name: Optional[str] = None,
+    file_hash: Optional[str] = None,
+    detection_method: Optional[str] = None,
+    risk_score: Optional[float] = None,
+    scan_id: Optional[int] = None,
+) -> "BehavioralPatterns":
+    """
+    Save sandbox behavioral pattern flags to the database.
+
+    Args:
+        session: Async DB session
+        patterns: Dict of pattern_name -> bool from vm_complete_analyzer.detect_patterns()
+        file_name: Original filename scanned
+        file_hash: SHA-256 of scanned file
+        detection_method: e.g. 'soft_voting_xgb_cnn'
+        risk_score: Optional risk score from analyzer
+
+    Returns:
+        Persisted BehavioralPatterns ORM row
+    """
+    total = sum(1 for v in patterns.values() if v)
+    row = BehavioralPatterns(
+        file_name=file_name,
+        file_hash=file_hash,
+        detection_method=detection_method,
+        mass_file_encryption=patterns.get('mass_file_encryption', False),
+        shadow_copy_deletion=patterns.get('shadow_copy_deletion', False),
+        registry_persistence=patterns.get('registry_persistence', False),
+        network_c2_communication=patterns.get('network_c2_communication', False),
+        ransom_note_creation=patterns.get('ransom_note_creation', False),
+        mass_file_deletion=patterns.get('mass_file_deletion', False),
+        suspicious_process_creation=patterns.get('suspicious_process_creation', False),
+        api_encrypt_rename_sequence=patterns.get('api_encrypt_rename_sequence', False),
+        total_patterns_detected=total,
+        risk_score=risk_score,
+        raw_patterns=patterns,
+        scan_id=scan_id,
+    )
+    session.add(row)
+    await session.commit()
+    await session.refresh(row)
+    return row
 
 async def get_recent_logs(
     session: AsyncSession,
@@ -500,7 +601,8 @@ async def queue_uncertain_sample(
     prediction_label: str,
     features_json: str,
     behavioral_enriched: bool = False,
-    behavioral_source: Optional[str] = None
+    behavioral_source: Optional[str] = None,
+    scan_id: Optional[int] = None,
 ) -> UncertainSampleQueue:
     """
     Queue an uncertain sample for later VT upload
@@ -546,7 +648,8 @@ async def queue_uncertain_sample(
         behavioral_enriched=behavioral_enriched,
         behavioral_source=behavioral_source,
         features_json=features_json,
-        status="PENDING"
+        status="PENDING",
+        scan_id=scan_id,
     )
     
     session.add(queue_entry)

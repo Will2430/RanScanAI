@@ -15,7 +15,9 @@ from path_config import get_test_folder
 
 # Build configuration
 SCRIPT_DIR = Path(__file__).parent  # Dynamic - finds files in same directory
-RANSOMWARE_SCRIPT = SCRIPT_DIR / "ransomware_simulator.py"
+# Build uses the activity_monitor copy — that is the maintained, optimised version.
+# The ransomware_simulation/ransomware_simulator.py copy is kept for reference only.
+RANSOMWARE_SCRIPT = SCRIPT_DIR.parent / "activity_monitor" / "ransomware_simulator.py"
 OUTPUT_DIR = SCRIPT_DIR / "dist"
 BUILD_DIR = SCRIPT_DIR / "build"
 SPEC_FILE = SCRIPT_DIR / "ransomware_simulator.spec"

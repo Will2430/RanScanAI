@@ -76,7 +76,8 @@ class CompleteAnalyzer:
                     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
                     from dynamic_path_config.path_config import get_test_folder
                     self.watch_dir = get_test_folder()
-                except Exception:
+                except Exception as _e:
+                    print(f"[WARN] get_test_folder() failed ({_e}), using fallback", file=sys.stderr)
                     self.watch_dir = Path.home() / 'Downloads' / 'RANSOMWARE_TEST_FOLDER'
             else:
                 # Generic EXE (installer, legit app) — watch its own parent directory.
@@ -197,12 +198,15 @@ class CompleteAnalyzer:
                     # Generic EXE: do NOT inject unknown flags; run from its own
                     # directory so relative-path lookups inside the installer work.
                     exe_cwd = str(self.target_path.parent)
+                # Use DEVNULL for stdout/stderr — we monitor the EXE via psutil/Frida,
+                # not by reading its console output. PIPE would cause the 64 KB Windows
+                # pipe buffer to fill up (the simulator has many print() calls) and the
+                # EXE would deadlock waiting for the buffer to drain.
                 process = psutil.Popen(
                     exe_cmd,
                     cwd=exe_cwd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
                 )
             
             malware_pid = process.pid
@@ -503,11 +507,12 @@ class CompleteAnalyzer:
         reg_changes = self.analysis['behavioral_changes'].get('registry', {})
         runtime = self.analysis['runtime_data']
         api_seq = self.analysis.get('api_sequence', [])
+        api_summary = self.analysis.get('api_summary', {})
         
         # Pattern 1: Mass file encryption
-        if fs_changes.get('total_encrypted', 0) > 50:
+        if api_summary.get('api_crypto_operations', 0) > 50:
             patterns['mass_file_encryption'] = True
-            print(f"   ✅ Mass file encryption detected ({fs_changes['total_encrypted']} files)")
+            print(f"   ✅ Mass file encryption detected ({api_summary['api_crypto_operations']} operations)")
         
         # Pattern 2: Ransom note creation
         if fs_changes.get('total_ransom_notes', 0) > 0:
@@ -525,14 +530,29 @@ class CompleteAnalyzer:
             print(f"   ✅ Registry persistence detected ({len(reg_changes['persistence_attempts'])} attempts)")
         
         # Pattern 5: Network C2 communication
-        if len(runtime.get('network_connections', [])) > 5:
+        if len(api_summary.get('api_network_connection', [])) > 5:
             patterns['network_c2_communication'] = True
-            print(f"   ✅ Network C2 detected ({len(runtime['network_connections'])} connections)")
+            print(f"   ✅ Network C2 detected ({len(api_summary['api_network_connection'])} connections)")
         
-        # Pattern 6: Suspicious process creation
-        if len(runtime.get('process_tree', [])) > 0:
+        # Pattern 6: Suspicious process creation / injection
+        # - Frida api_process_enumerations: NtQuerySystemInformation(5) calls
+        # - api_process_opens: OpenProcess / NtOpenProcess (injection precursor)
+        # - api_process_injections: WriteProcessMemory / ReadProcessMemory / NtCreateThreadEx
+        # - api_token_operations: AdjustTokenPrivileges / OpenProcessToken (privilege escalation)
+        frida_proc_enums = api_summary.get('api_process_enumerations', 0)
+        api_proc_opens   = api_summary.get('api_process_opens',        0)
+        api_proc_inject  = api_summary.get('api_process_injections',   0)
+        api_token_ops    = api_summary.get('api_token_operations',     0)
+        psutil_spawned   = len(runtime.get('process_tree', []))
+        if frida_proc_enums > 0 or psutil_spawned > 0 or api_proc_opens > 0 or api_proc_inject > 0:
             patterns['suspicious_process_creation'] = True
-            print(f"   ✅ Process spawning detected ({len(runtime['process_tree'])} processes)")
+            details = []
+            if frida_proc_enums: details.append(f"proc_enum={frida_proc_enums}")
+            if api_proc_opens:   details.append(f"OpenProcess={api_proc_opens}")
+            if api_proc_inject:  details.append(f"WriteProcessMemory={api_proc_inject}")
+            if api_token_ops:    details.append(f"token_ops={api_token_ops}")
+            if psutil_spawned:   details.append(f"psutil_children={psutil_spawned}")
+            print(f"   ✅ Process activity detected ({', '.join(details)})")
         
         # Pattern 7: API Encrypt-Rename sequence (from Frida API trace)
         if api_seq:
@@ -583,20 +603,28 @@ class CompleteAnalyzer:
         # Run API tracer
         print(f"   Target: {self.target_path}")
         try:
+            # IMPORTANT: do NOT use capture_output=True or stdout=PIPE here.
+            # The tracer + spawned EXE together emit thousands of progress lines.
+            # A PIPE buffer is only ~64 KB; once full every print() in the tracer
+            # blocks, stalling the Frida on_message loop and starving the API
+            # sequence.  Let stdout flow directly to the terminal (no pipe),
+            # capture only stderr so we can report errors.
             result = subprocess.run(
                 [sys.executable, str(tracer_script), str(self.target_path)],
-                capture_output=True,
+                stdout=None,             # → flows to terminal in real-time, no pipe
+                stderr=subprocess.PIPE,  # only stderr captured (small, error messages)
                 text=True,
                 encoding='utf-8',
                 errors='replace',
-                timeout=120
+                timeout=60             # 10 min — matches execute_and_monitor budget
             )
             
             if result.returncode == 0:
                 print("   ✅ API tracing complete")
                 
                 # Load api_trace_ntdll.json (NT-level tracer output)
-                api_json = Path("api_trace_ntdll.json")
+                # The tracer writes this file to its own cwd (activity_monitor/)
+                api_json = Path(__file__).parent / "api_trace_ntdll.json"
                 if api_json.exists():
                     with open(api_json, 'r') as f:
                         api_data = json.load(f)
@@ -614,7 +642,7 @@ class CompleteAnalyzer:
                     print(f"      Error: {result.stderr[:200]}")
         
         except subprocess.TimeoutExpired:
-            print("   ⚠️  API tracer timed out (max 120s)")
+            print("   ⚠️  API tracer timed out (max 600s)")
         except Exception as e:
             print(f"   ⚠️  Error running API tracer: {e}")
         
@@ -658,7 +686,7 @@ class CompleteAnalyzer:
             'execution_time': runtime.get('execution_time', 0.0),
             
             # System-wide process count during malware run (proxy for processes_monitored Zenodo feature)
-            'system_process_count': runtime.get('max_system_processes', 0),
+            'system_process_count': api_summary.get('api_process_enumerations', 0),
             
             # Network counts from NT-level API tracer (ws2_32.dll hooks)
             'api_network_connections': api_summary.get('api_network_connections', 0),
@@ -759,7 +787,7 @@ class CompleteAnalyzer:
             score += 5
             reasons.append("+5: >50 files encrypted")
         
-        if features.get('registry_write_count', 0) > 50:
+        if features.get('api_registry_writes', 0) > 50:
             score += 10
             reasons.append("+10: >50 registry writes")
         elif features.get('registry_write_count', 0) > 20:
@@ -770,7 +798,7 @@ class CompleteAnalyzer:
             score += 5
             reasons.append("+5: >10 network connections")
         
-        if features.get('process_spawn_count', 0) > 0:
+        if features.get('system_process_count', 0) > 0:
             score += 5
             reasons.append("+5: Spawned child processes")
         
@@ -882,6 +910,7 @@ def main():
         print(f"\nInitializing analyzer...")
         analyzer = CompleteAnalyzer(target)
         print(f"✓ Analyzer initialized")
+        print(f"   Target stem: {analyzer.target_path.stem!r}  is_simulator={analyzer.is_simulator}")
         print(f"   Watch directory: {analyzer.watch_dir}")
         print(f"   Results directory: {analyzer.results_dir}")
         
@@ -919,7 +948,7 @@ def main():
         else:
             # Fallback to basic monitoring
             print("\n⚠️  API tracing not available, using basic monitoring...")
-            analyzer.execute_and_monitor(timeout=90)
+            analyzer.execute_and_monitor(timeout=60)
         
         # Phase 3: Analyze behavioral changes
         print("\n" + "="*80)
@@ -955,13 +984,14 @@ def main():
             print("✅ ANALYSIS COMPLETE")
             print("="*80)
             fs_changes = analyzer.analysis['behavioral_changes'].get('filesystem', {})
-            reg_changes = analyzer.analysis['behavioral_changes'].get('registry', {})
+            api_summary = analyzer.analysis.get('api_summary', {})
+            ml_features = analyzer.analysis.get('ml_features', {})
             print(f"\n📊 Summary...")
             print(f"   Files created: {fs_changes.get('total_created', 0)}")
             print(f"   Files encrypted: {fs_changes.get('total_encrypted', 0)}")
             print(f"   Files deleted: {fs_changes.get('total_deleted', 0)}")
-            print(f"   Registry writes: {reg_changes.get('writes', 0)}")
-            print(f"   Network connections: {len(analyzer.analysis['runtime_data'].get('network_connections', []))}")
+            print(f"   Registry writes: {api_summary.get('api_registry_writes', 0)}")
+            print(f"   Network connections: {ml_features.get('api_network_operations', 0)}")
             print(f"   API calls captured: {len(analyzer.analysis.get('api_sequence', []))}")
             print(f"   Patterns detected: {sum(analyzer.analysis['patterns'].values())}/8")
             print(f"   ML features extracted: {len(analyzer.analysis['ml_features'])}")

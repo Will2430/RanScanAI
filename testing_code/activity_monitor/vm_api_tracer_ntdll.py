@@ -121,6 +121,29 @@ FRIDA_TO_CANONICAL = {
     'bcrypt_import_key':     'BCryptImportKeyPair',
     # Process
     'proc_enum':             'NtQuerySystemInformation',
+    # Process injection / memory / token (NEW)
+    'mem_alloc':             'NtAllocateVirtualMemory',
+    'proc_write_mem':        'WriteProcessMemory',
+    'proc_read_mem':         'ReadProcessMemory',
+    'proc_open':             'NtOpenProcess',
+    'thread_create':         'CreateThread',
+    'token_open':            'OpenProcessToken',
+    'token_adjust_priv':     'AdjustTokenPrivileges',
+    # Process enumeration toolhelp / thread ops / mutex
+    'proc32next':            'Process32NextW',
+    'toolhelp_snap':         'CreateToolhelp32Snapshot',
+    'thread_suspend':        'NtSuspendThread',
+    'thread_resume':         'NtResumeThread',
+    'mutex_create':          'NtCreateMutant',
+    # Section mapping / memory protection / DLL loading / file attr
+    'dll_handle':            'LdrGetDllHandle',
+    'dll_load':              'LdrLoadDll',
+    'section_create':        'NtCreateSection',
+    'section_map':           'NtMapViewOfSection',
+    'section_unmap':         'NtUnmapViewOfSection',
+    'mem_protect':           'NtProtectVirtualMemory',
+    'file_attr':             'NtQueryAttributesFile',
+    'mem_free':              'NtFreeVirtualMemory',
 }
 
 
@@ -138,6 +161,11 @@ class NTAPITracer:
             'reg_reads': 0,    'reg_writes': 0,
             'net_dns': 0,      'net_connect': 0, 'net_sendto': 0,
             'proc_enum': 0,    'crypto_ops':  0,
+            # Process injection / memory / privilege escalation
+            'mem_alloc':   0,  'proc_inject':  0,
+            'proc_open':   0,  'token_ops':    0,
+            # Process32NextW / thread suspend / mutex
+            'proc32next':  0,  'thread_ops':   0,  'mutex_create': 0,
         }
         
     def on_message(self, message, data):
@@ -191,8 +219,25 @@ class NTAPITracer:
                 proc   = self.counters['proc_enum']
                 fcr    = self.counters['file_creates']
                 crypto = self.counters['crypto_ops']
-                print(f"   [counts] reg_reads={reg}  dns={dns}  connects={conn}  "
-                      f"proc_enum={proc}  file_creates={fcr}  crypto_ops={crypto}")
+                mem_alloc  = self.counters['mem_alloc']
+                proc_inject= self.counters['proc_inject']
+                proc_open  = self.counters['proc_open']
+                token_ops  = self.counters['token_ops']
+                p32n       = self.counters['proc32next']
+                th_ops     = self.counters['thread_ops']
+                mut        = self.counters['mutex_create']
+                dll_h      = self.counters.get('dll_handle', 0)
+                dll_l      = self.counters.get('dll_load', 0)
+                sect       = self.counters.get('section_ops', 0)
+                mprotect   = self.counters.get('mem_protect', 0)
+                fattr      = self.counters.get('file_attr', 0)
+                mfree      = self.counters.get('mem_free', 0)
+                print(f"   [counts] reg={reg} dns={dns} conn={conn} proc_enum={proc} "
+                      f"fcreate={fcr} crypto={crypto} "
+                      f"mem_alloc={mem_alloc} protect={mprotect} free={mfree} "
+                      f"inject={proc_inject} proc_open={proc_open} token={token_ops} "
+                      f"p32n={p32n} thread={th_ops} mutex={mut} "
+                      f"dll_h={dll_h} dll_l={dll_l} sect={sect} fattr={fattr}")
                 return
 
         elif message['type'] == 'error':
@@ -234,6 +279,15 @@ class NTAPITracer:
             reg_reads:    0, reg_writes:   0,
             net_dns:      0, net_connect:  0, net_sendto:   0,
             proc_enum:    0, crypto_ops:   0,
+            // process injection / memory / privilege escalation
+            mem_alloc:    0, proc_inject:  0,
+            proc_open:    0, token_ops:    0,
+            // process32next / thread suspend / mutex
+            proc32next:   0, thread_ops:   0, mutex_create:  0,
+            // section map / DLL load / mem protect / file attr
+            dll_handle:   0, dll_load:     0,
+            section_ops:  0, mem_protect:  0,
+            file_attr:    0, mem_free:     0,
         };
 
         // ── Bounded event detail queues (drained in flush, never via send()) ──
@@ -289,7 +343,14 @@ class NTAPITracer:
                             reg_reads:    C.reg_reads,    reg_writes:   C.reg_writes,
                             net_dns:      C.net_dns,      net_connect:  C.net_connect,
                             net_sendto:   C.net_sendto,   proc_enum:    C.proc_enum,
-                            crypto_ops:   C.crypto_ops },
+                            crypto_ops:   C.crypto_ops,
+                            mem_alloc:    C.mem_alloc,    proc_inject:  C.proc_inject,
+                            proc_open:    C.proc_open,    token_ops:    C.token_ops,
+                            proc32next:   C.proc32next,   thread_ops:   C.thread_ops,
+                            mutex_create: C.mutex_create,
+                            dll_handle:   C.dll_handle,   dll_load:     C.dll_load,
+                            section_ops:  C.section_ops,  mem_protect:  C.mem_protect,
+                            file_attr:    C.file_attr,    mem_free:     C.mem_free },
                 renames:  rdrains,
                 deletes:  ddrains,
                 sequence: sdrains,
@@ -638,6 +699,279 @@ class NTAPITracer:
             }
         } catch(e) {}
 
+        // ── PROCESS INJECTION / MEMORY / TOKEN HOOKS ─────────────────────────
+        // VirtualAllocEx is hooked at kernel32 level (not NtAllocateVirtualMemory)
+        // because Python's heap manager calls NtAllocateVirtualMemory constantly,
+        // making ntdll-level hooking too noisy.  VirtualAllocEx is only called by
+        // code explicitly doing cross-/own-process allocation (injection pattern).
+        try {
+            if (kernel32) {
+                var _vae = kernel32.getExportByName('VirtualAllocEx');
+                if (_vae) {
+                    Interceptor.attach(_vae, { onEnter: function(args) {
+                        C.mem_alloc++;
+                        seqPush('mem_alloc', {});
+                    }});
+                    send({api:'debug', args:{msg:'hook:VirtualAllocEx OK'}});
+                }
+            }
+        } catch(e) {}
+
+        // WriteProcessMemory → ntdll!NtWriteVirtualMemory
+        try {
+            var NtWriteVM = ntdll.getExportByName('NtWriteVirtualMemory');
+            if (NtWriteVM) {
+                Interceptor.attach(NtWriteVM, { onEnter: function(args) {
+                    C.proc_inject++;
+                    seqPush('proc_write_mem', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtWriteVirtualMemory OK'}});
+            }
+        } catch(e) {}
+
+        // ReadProcessMemory → ntdll!NtReadVirtualMemory
+        try {
+            var NtReadVM = ntdll.getExportByName('NtReadVirtualMemory');
+            if (NtReadVM) {
+                Interceptor.attach(NtReadVM, { onEnter: function(args) {
+                    C.proc_inject++;
+                    seqPush('proc_read_mem', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtReadVirtualMemory OK'}});
+            }
+        } catch(e) {}
+
+        // OpenProcess → ntdll!NtOpenProcess
+        try {
+            var NtOpenProc = ntdll.getExportByName('NtOpenProcess');
+            if (NtOpenProc) {
+                Interceptor.attach(NtOpenProc, { onEnter: function(args) {
+                    C.proc_open++;
+                    seqPush('proc_open', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtOpenProcess OK'}});
+            }
+        } catch(e) {}
+
+        // CreateRemoteThread → ntdll!NtCreateThreadEx
+        try {
+            var NtCreateThEx = ntdll.getExportByName('NtCreateThreadEx');
+            if (NtCreateThEx) {
+                Interceptor.attach(NtCreateThEx, { onEnter: function(args) {
+                    C.proc_inject++;
+                    seqPush('thread_create', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtCreateThreadEx OK'}});
+            }
+        } catch(e) {}
+
+        // OpenProcessToken → ntdll!NtOpenProcessToken / NtOpenProcessTokenEx
+        try {
+            var NtOpenProcTok = ntdll.getExportByName('NtOpenProcessToken')
+                             || ntdll.getExportByName('NtOpenProcessTokenEx');
+            if (NtOpenProcTok) {
+                Interceptor.attach(NtOpenProcTok, { onEnter: function(args) {
+                    C.token_ops++;
+                    seqPush('token_open', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtOpenProcessToken OK'}});
+            }
+        } catch(e) {}
+
+        // AdjustTokenPrivileges → ntdll!NtAdjustPrivilegesToken
+        try {
+            var NtAdjPriv = ntdll.getExportByName('NtAdjustPrivilegesToken');
+            if (NtAdjPriv) {
+                Interceptor.attach(NtAdjPriv, { onEnter: function(args) {
+                    C.token_ops++;
+                    seqPush('token_adjust_priv', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtAdjustPrivilegesToken OK'}});
+            }
+        } catch(e) {}
+
+        // ── SECTION MAPPING HOOKS ─────────────────────────────────────────────
+        // NtCreateSection + NtMapViewOfSection + NtUnmapViewOfSection appear
+        // 169/493/273 times in a typical malware run (368.json).
+        // Ransomware uses these to stage code and share memory between processes.
+        try {
+            var NtCreateSect = ntdll.getExportByName('NtCreateSection');
+            if (NtCreateSect) {
+                Interceptor.attach(NtCreateSect, { onEnter: function(args) {
+                    C.section_ops++;
+                    seqPush('section_create', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtCreateSection OK'}});
+            }
+        } catch(e) {}
+
+        try {
+            var NtMapViewSect = ntdll.getExportByName('NtMapViewOfSection');
+            if (NtMapViewSect) {
+                Interceptor.attach(NtMapViewSect, { onEnter: function(args) {
+                    C.section_ops++;
+                    // Record every 2nd to keep sequence rich but not overloaded
+                    if (C.section_ops % 2 === 0) seqPush('section_map', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtMapViewOfSection OK'}});
+            }
+        } catch(e) {}
+
+        try {
+            var NtUnmapViewSect = ntdll.getExportByName('NtUnmapViewOfSection');
+            if (NtUnmapViewSect) {
+                Interceptor.attach(NtUnmapViewSect, { onEnter: function(args) {
+                    C.section_ops++;
+                    if (C.section_ops % 3 === 0) seqPush('section_unmap', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtUnmapViewOfSection OK'}});
+            }
+        } catch(e) {}
+
+        // ── MEMORY PROTECTION + FREE HOOKS ───────────────────────────────────
+        // Hook at kernel32 level — ntdll!NtProtectVirtualMemory is too noisy
+        // because Python's own JIT calls it. VirtualProtect is only called by
+        // user-mode code explicitly changing permissions.
+        try {
+            if (kernel32) {
+                var _vp = kernel32.getExportByName('VirtualProtect');
+                if (_vp) {
+                    Interceptor.attach(_vp, { onEnter: function(args) {
+                        C.mem_protect++;
+                        seqPush('mem_protect', {});
+                    }});
+                    send({api:'debug', args:{msg:'hook:VirtualProtect OK'}});
+                }
+                var _vf = kernel32.getExportByName('VirtualFree');
+                if (_vf) {
+                    Interceptor.attach(_vf, { onEnter: function(args) {
+                        C.mem_free++;
+                        if (C.mem_free % 5 === 0) seqPush('mem_free', {});
+                    }});
+                    send({api:'debug', args:{msg:'hook:VirtualFree OK'}});
+                }
+            }
+        } catch(e) {}
+
+        // ── DLL LOADING HOOKS (LdrGetDllHandle / LdrLoadDll) ─────────────────
+        // LdrGetDllHandle: 314 calls — ransomware probes for AV/EDR DLLs.
+        // Hook at kernel32!GetModuleHandleW to avoid Python-startup noise.
+        // LdrLoadDll: 188 calls — ransomware loads crypto/network DLLs at runtime.
+        try {
+            if (kernel32) {
+                var _gmhw = kernel32.getExportByName('GetModuleHandleW');
+                if (_gmhw) {
+                    Interceptor.attach(_gmhw, { onEnter: function(args) {
+                        C.dll_handle++;
+                        // Sample 1-in-10 — high frequency during startup
+                        if (C.dll_handle % 10 === 0) seqPush('dll_handle', {});
+                    }});
+                    send({api:'debug', args:{msg:'hook:GetModuleHandleW OK'}});
+                }
+                var _gmha = kernel32.getExportByName('GetModuleHandleA');
+                if (_gmha) {
+                    Interceptor.attach(_gmha, { onEnter: function(args) {
+                        C.dll_handle++;
+                        if (C.dll_handle % 10 === 0) seqPush('dll_handle', {});
+                    }});
+                }
+            }
+        } catch(e) {}
+
+        try {
+            var LdrLoadDll = ntdll.getExportByName('LdrLoadDll');
+            if (LdrLoadDll) {
+                Interceptor.attach(LdrLoadDll, { onEnter: function(args) {
+                    C.dll_load++;
+                    seqPush('dll_load', {});
+                }});
+                send({api:'debug', args:{msg:'hook:LdrLoadDll OK'}});
+            }
+        } catch(e) {}
+
+        // ── FILE ATTRIBUTE QUERY HOOK (NtQueryAttributesFile) ───────────────
+        // NtQueryAttributesFile: 431 calls in 368.json.
+        // Ransomware calls GetFileAttributesW on every candidate file before
+        // deciding whether to encrypt it.
+        try {
+            var NtQAttr = ntdll.getExportByName('NtQueryAttributesFile');
+            if (NtQAttr) {
+                Interceptor.attach(NtQAttr, { onEnter: function(args) {
+                    C.file_attr++;
+                    // Sample 1-in-5 to keep sequence meaningful but not flooded
+                    if (C.file_attr % 5 === 0) {
+                        var p = readObjectAttributes(args[0]);
+                        seqPush('file_attr', p ? {p: p} : {});
+                    }
+                }});
+                send({api:'debug', args:{msg:'hook:NtQueryAttributesFile OK'}});
+            }
+        } catch(e) {}
+
+        // ── PROCESS32NEXT / CREATETOOLHELP32SNAPSHOT HOOKS ───────────────────
+        // Process32NextW is the #1 most frequent API in real ransomware traces
+        // (~2000+ calls per run as malware scans all processes for AV/sandbox).
+        try {
+            if (kernel32) {
+                var _p32n = kernel32.getExportByName('Process32NextW');
+                if (_p32n) {
+                    Interceptor.attach(_p32n, { onEnter: function(args) {
+                        C.proc32next++;
+                        // Push every 5th call to keep sequence manageable but rich
+                        if (C.proc32next % 5 === 0) seqPush('proc32next', {});
+                    }});
+                    send({api:'debug', args:{msg:'hook:Process32NextW OK'}});
+                }
+            }
+        } catch(e) {}
+
+        try {
+            if (kernel32) {
+                var _cths = kernel32.getExportByName('CreateToolhelp32Snapshot');
+                if (_cths) {
+                    Interceptor.attach(_cths, { onEnter: function(args) {
+                        seqPush('toolhelp_snap', {});
+                    }});
+                    send({api:'debug', args:{msg:'hook:CreateToolhelp32Snapshot OK'}});
+                }
+            }
+        } catch(e) {}
+
+        // ── THREAD SUSPEND / RESUME HOOKS ─────────────────────────────────────
+        try {
+            var NtSuspTh = ntdll.getExportByName('NtSuspendThread');
+            if (NtSuspTh) {
+                Interceptor.attach(NtSuspTh, { onEnter: function(args) {
+                    C.thread_ops++;
+                    seqPush('thread_suspend', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtSuspendThread OK'}});
+            }
+        } catch(e) {}
+
+        try {
+            var NtResTh = ntdll.getExportByName('NtResumeThread');
+            if (NtResTh) {
+                Interceptor.attach(NtResTh, { onEnter: function(args) {
+                    C.thread_ops++;
+                    seqPush('thread_resume', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtResumeThread OK'}});
+            }
+        } catch(e) {}
+
+        // ── NT MUTEX (NtCreateMutant) HOOK ────────────────────────────────────
+        try {
+            var NtCrMut = ntdll.getExportByName('NtCreateMutant');
+            if (NtCrMut) {
+                Interceptor.attach(NtCrMut, { onEnter: function(args) {
+                    C.mutex_create++;
+                    seqPush('mutex_create', {});
+                }});
+                send({api:'debug', args:{msg:'hook:NtCreateMutant OK'}});
+            }
+        } catch(e) {}
+
         send({api: 'init', args: {message: 'NT-level hooks installed (batched flush every 5 s)'}});
         """
     
@@ -725,10 +1059,10 @@ class NTAPITracer:
         print(f"✅ Process spawned (PID: {pid})")
         print("📊 Capturing NT-level API calls...\n")
         
-        # Monitor for 90 seconds (or until process exits)
+        # Monitor until process exits or 600s timeout
         try:
             start_time = time.time()
-            duration = 90
+            duration = 120 
             
             while time.time() - start_time < duration:
                 if self._process_exited:
@@ -786,6 +1120,31 @@ class NTAPITracer:
             print(f"\n   🚨 RANSOMWARE PATTERN DETECTED: Mass file write + rename")
         if C.get('crypto_ops', 0) > 10:
             print(f"   🚨 CRYPTO ACTIVITY DETECTED: {C.get('crypto_ops', 0)} BCrypt/CryptEncrypt calls")
+        if C.get('proc_inject', 0) > 0 or C.get('mem_alloc', 0) > 0:
+            print(f"   \U0001f6a8 INJECTION PATTERN DETECTED: "
+                  f"mem_alloc={C.get('mem_alloc',0)}  proc_inject={C.get('proc_inject',0)}  "
+                  f"proc_open={C.get('proc_open',0)}  token_ops={C.get('token_ops',0)}")
+
+        print(f"   Memory alloc (VirtualAllocEx): {C.get('mem_alloc', 0)}")
+        print(f"   Process inject (Write/Read/Thread): {C.get('proc_inject', 0)}")
+        print(f"   Process opens (OpenProcess):   {C.get('proc_open', 0)}")
+        print(f"   Token operations:               {C.get('token_ops', 0)}")
+        print(f"   Process32NextW calls:           {C.get('proc32next', 0)}")
+        print(f"   Thread suspend/resume:          {C.get('thread_ops', 0)}")
+        print(f"   NtCreateMutant calls:           {C.get('mutex_create', 0)}")
+        print(f"   DLL handle probes (GetModHandle):{C.get('dll_handle', 0)}")
+        print(f"   DLL load calls (LdrLoadDll):    {C.get('dll_load', 0)}")
+        print(f"   Section map ops:                {C.get('section_ops', 0)}")
+        print(f"   VirtualProtect calls:           {C.get('mem_protect', 0)}")
+        print(f"   NtQueryAttributesFile calls:    {C.get('file_attr', 0)}")
+        print(f"   VirtualFree calls:              {C.get('mem_free', 0)}")
+
+        if C.get('proc32next', 0) > 100:
+            print(f"   \U0001f6a8 PROCESS SCAN DETECTED: {C.get('proc32next',0)} Process32NextW calls")
+        if C.get('section_ops', 0) > 20:
+            print(f"   \U0001f6a8 SECTION MAPPING DETECTED: {C.get('section_ops',0)} NtCreateSection/MapViewOfSection calls")
+        if C.get('mem_protect', 0) > 30:
+            print(f"   \U0001f6a8 MEMORY PROTECTION PATTERN: {C.get('mem_protect',0)} VirtualProtect calls (code unpacking)")
 
         return {
             'mass_file_creation':     C['file_creates'],
@@ -798,6 +1157,19 @@ class NTAPITracer:
             'network_connections':    C['net_connect'],
             'process_enumerations':   C['proc_enum'],
             'crypto_operations':      C.get('crypto_ops', 0),
+            'memory_allocations':     C.get('mem_alloc', 0),
+            'process_injections':     C.get('proc_inject', 0),
+            'process_opens':          C.get('proc_open', 0),
+            'token_operations':       C.get('token_ops', 0),
+            'process32next_calls':    C.get('proc32next', 0),
+            'thread_ops':             C.get('thread_ops', 0),
+            'mutex_creates':          C.get('mutex_create', 0),
+            'dll_handle_probes':      C.get('dll_handle', 0),
+            'dll_loads':              C.get('dll_load', 0),
+            'section_map_ops':        C.get('section_ops', 0),
+            'mem_protect_ops':        C.get('mem_protect', 0),
+            'file_attr_queries':      C.get('file_attr', 0),
+            'mem_free_ops':           C.get('mem_free', 0),
         }
     
     def save_results(self):
@@ -816,6 +1188,19 @@ class NTAPITracer:
             'api_network_dns':          C['net_dns'],
             'api_process_enumerations': C['proc_enum'],
             'api_crypto_operations':    C.get('crypto_ops', 0),
+            'api_memory_allocations':   C.get('mem_alloc', 0),
+            'api_process_injections':   C.get('proc_inject', 0),
+            'api_process_opens':        C.get('proc_open', 0),
+            'api_token_operations':     C.get('token_ops', 0),
+            'api_process32next_calls':  C.get('proc32next', 0),
+            'api_thread_ops':           C.get('thread_ops', 0),
+            'api_mutex_creates':        C.get('mutex_create', 0),
+            'api_dll_handle_probes':    C.get('dll_handle', 0),
+            'api_dll_loads':            C.get('dll_load', 0),
+            'api_section_map_ops':      C.get('section_ops', 0),
+            'api_mem_protect_ops':      C.get('mem_protect', 0),
+            'api_file_attr_queries':    C.get('file_attr', 0),
+            'api_mem_free_ops':         C.get('mem_free', 0),
         }
 
         # Normalise api_sequence: map Frida shorthand → canonical Windows API names
