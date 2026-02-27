@@ -66,6 +66,24 @@ html {
     scroll-behavior: smooth;
 }
 
+/* Override global red scrollbar while registration page is active */
+body.reg-page-active::-webkit-scrollbar {
+    width: 6px;
+}
+
+body.reg-page-active::-webkit-scrollbar-track {
+    background: #f0f0f0;
+}
+
+body.reg-page-active::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 3px;
+}
+
+body.reg-page-active::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
     background: var(--background);
@@ -241,6 +259,25 @@ body {
     margin: 0 auto;
     width: 100%;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #c0c0c0 transparent;
+}
+
+.form-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.form-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.form-container::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 3px;
+}
+
+.form-container::-webkit-scrollbar-thumb:hover {
+    background: #999;
 }
 
 .registration-form {
@@ -504,6 +541,25 @@ select:disabled {
     padding: 4px 0;
     max-height: 220px;
     overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #b0b0b0 transparent;
+}
+
+.country-picker-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.country-picker-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.country-picker-list::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border-radius: 3px;
+}
+
+.country-picker-list::-webkit-scrollbar-thumb:hover {
+    background: #999;
 }
 
 .country-picker-list li {
@@ -696,8 +752,8 @@ select:disabled {
 
 .form-actions {
     display: flex;
-    gap: var(--spacing-lg);
-    padding: var(--spacing-2xl);
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg) var(--spacing-xl);
     border-top: 1px solid var(--divider);
     justify-content: center;
     align-items: center;
@@ -707,13 +763,15 @@ select:disabled {
 }
 
 .form-actions .btn {
-    min-height: 50px;
-    padding: 14px 48px !important;
-    min-width: 180px !important;
-    font-size: 1.05rem !important;
+    min-height: 48px;
+    padding: 12px 24px !important;
+    font-size: 1rem !important;
     font-weight: 700 !important;
     border-radius: var(--radius-lg) !important;
     transition: all var(--transition-normal) !important;
+    flex-shrink: 0;
+    white-space: nowrap;
+    overflow: visible;
 }
 
 .form-actions .btn:not(:last-child) {

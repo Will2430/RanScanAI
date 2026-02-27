@@ -11,6 +11,7 @@ const LoginPage = () => {
     const [userType, setUserType] = useState('user');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
     const [showPrivileges, setShowPrivileges] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
@@ -46,6 +47,9 @@ const LoginPage = () => {
         
         setShowPrivileges(false);
         setUserType(type);
+        setUsername('');
+        setPassword('');
+        setShowPassword(false);
         setErrorMessage('');
         setTimeout(() => setShowPrivileges(true), 100);
     };
@@ -72,6 +76,7 @@ const LoginPage = () => {
                 } else {
                     setErrorMessage(errorData.detail || 'Login failed. Please try again.');
                 }
+                setPassword('');
                 setIsLoading(false);
                 return;
             }
@@ -171,15 +176,27 @@ const LoginPage = () => {
                             disabled={isLoading}
                             required
                         />
-                        <input
-                            type="password"
-                            placeholder="Password"
-                            value={password}
-                            onChange={(e) => { setPassword(e.target.value); setErrorMessage(''); }}
-                            className="login-input"
-                            disabled={isLoading}
-                            required
-                        />
+                        <div className="password-wrapper">
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Password"
+                                value={password}
+                                onChange={(e) => { setPassword(e.target.value); setErrorMessage(''); }}
+                                className="login-input password-input"
+                                disabled={isLoading}
+                                required
+                            />
+                            <button
+                                type="button"
+                                className="eye-toggle-btn"
+                                onClick={() => setShowPassword(!showPassword)}
+                                disabled={isLoading}
+                                tabIndex={-1}
+                                title={showPassword ? 'Hide password' : 'Show password'}
+                            >
+                                {showPassword ? '🙈' : '👁️'}
+                            </button>
+                        </div>
                         <button 
                             type="submit" 
                             className="sign-in-btn"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './AdminDash.css';
 import DashboardHeader from './components/DashboardHeader';
 import StatCard from './components/StatCard';
@@ -15,9 +15,11 @@ function authHeaders() {
 
 const AdminDash = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [timeRange, setTimeRange] = useState('all');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [toast, setToast] = useState('');
 
     // Real data state
     const [stats, setStats] = useState([
@@ -39,6 +41,17 @@ const AdminDash = () => {
 
         fetchAdminData();
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Show toast from navigation state (e.g. after user registration)
+    useEffect(() => {
+        if (location.state?.successMsg) {
+            setToast(location.state.successMsg);
+            // Clear the state so it doesn't re-show on refresh
+            window.history.replaceState({}, '');
+            const timer = setTimeout(() => setToast(''), 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [location.state]);
 
     const fetchAdminData = async () => {
         setLoading(true);
@@ -110,6 +123,15 @@ const AdminDash = () => {
     return (
         <div className="admin-dash-container">
             <DashboardHeader userType="Admin" onLogout={handleLogout} />
+
+            {/* Success Toast */}
+            {toast && (
+                <div className="success-toast">
+                    <span className="toast-icon">✓</span>
+                    <span>{toast}</span>
+                    <button className="toast-close" onClick={() => setToast('')}>✕</button>
+                </div>
+            )}
 
             <div className="dash-content">
                 {/* Top Navigation */}

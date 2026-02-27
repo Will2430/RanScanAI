@@ -3,6 +3,62 @@
     min-height: 100vh;
 }
 
+/* Success Toast */
+.success-toast {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 9999;
+    background: #15803d;
+    color: #fff;
+    padding: 14px 22px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+    animation: toastSlideIn 0.4s ease, toastFadeOut 0.5s ease 4.5s forwards;
+}
+
+.toast-icon {
+    font-size: 1.15rem;
+    background: rgba(255, 255, 255, 0.2);
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.toast-close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1rem;
+    cursor: pointer;
+    margin-left: 8px;
+    padding: 0;
+    line-height: 1;
+}
+
+.toast-close:hover {
+    color: #fff;
+}
+
+@keyframes toastSlideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes toastFadeOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+
 /* Dashboard Header */
 .dash-header {
     background-color: #1a1a1a;
@@ -18,7 +74,46 @@
 .header-left {
     display: flex;
     align-items: center;
-    gap: 40px;
+    gap: 20px;
+}
+
+/* Register User button beside logo */
+.register-user-btn {
+    background: transparent;
+    color: #C83A2B;
+    border: 1.5px solid #C83A2B;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+
+.register-user-btn:hover {
+    background: #C83A2B;
+    color: #ffffff;
+}
+
+/* Manage Users button beside Register User */
+.manage-users-btn {
+    background: transparent;
+    color: #ccc;
+    border: 1.5px solid #555;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    white-space: nowrap;
+}
+
+.manage-users-btn:hover {
+    background: #333;
+    color: #fff;
+    border-color: #888;
 }
 
 .dash-title {

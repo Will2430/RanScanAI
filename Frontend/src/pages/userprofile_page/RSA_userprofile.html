@@ -25,9 +25,6 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                 <span class="notif-dot"></span>
             </button>
-            <a class="icon-btn user-btn" href="#" aria-label="User profile">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            </a>
         </div>
     </header>
 
@@ -50,13 +47,15 @@
 							<div class="info-label">User Name</div>
 							<div class="info-value" id="profile-username">UserName001</div>
 						</div>
-						<div class="profile-info-card">
+						<div class="profile-info-card password-card">
 							<div class="info-label">Password</div>
-							<div class="info-value">********</div>
-						</div>
-						<div class="profile-info-card">
-							<div class="info-label">User ID</div>
-							<div class="info-value" id="profile-user-id">—</div>
+							<div class="info-value">
+								<span>********</span>
+								<button class="change-pw-btn" id="open-pw-modal" title="Change Password">
+									<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+									Change
+								</button>
+							</div>
 						</div>
 						<div class="profile-info-card">
 							<div class="info-label">Account Status</div>
@@ -107,6 +106,99 @@
 		</div>
 	</main>
 
+	<!-- Change Password Modal (Two-Step) -->
+	<div class="modal-overlay" id="pw-modal-overlay">
+		<div class="modal-box">
+			<button class="modal-close" id="close-pw-modal" aria-label="Close">
+				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+			</button>
+
+			<!-- ====== STEP 1: Verify Identity ====== -->
+			<div class="modal-step" id="step-verify">
+				<div class="modal-icon">
+					<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16" r="1"/></svg>
+				</div>
+				<h3>Verify Your Identity</h3>
+				<p class="modal-desc">Please re-enter your current password to continue.</p>
+				<form id="verify-pw-form" autocomplete="off">
+					<div class="input-group">
+						<label for="verify-old-pw">Current Password</label>
+						<div class="pw-input-wrap">
+							<input type="password" id="verify-old-pw" required placeholder="Enter current password" autocomplete="current-password" />
+							<button type="button" class="pw-toggle" data-target="verify-old-pw" aria-label="Show password">
+								<svg class="eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+								<svg class="eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+							</button>
+						</div>
+					</div>
+					<div class="modal-error" id="verify-pw-error"></div>
+					<button type="submit" class="modal-submit" id="verify-pw-submit">
+						<span class="btn-text">Continue</span>
+						<span class="btn-spinner" style="display:none"></span>
+					</button>
+				</form>
+			</div>
+
+			<!-- ====== STEP 2: Set New Password ====== -->
+			<div class="modal-step" id="step-change" style="display:none">
+				<div class="modal-icon icon-success">
+					<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+				</div>
+				<h3>Set a New Password</h3>
+				<p class="modal-desc">Your identity has been verified. Enter your new password below.</p>
+				<form id="change-pw-form" autocomplete="off">
+					<div class="input-group">
+						<label for="new-pw">New Password</label>
+						<div class="pw-input-wrap">
+							<input type="password" id="new-pw" required minlength="8" placeholder="Minimum 8 characters" autocomplete="new-password" />
+							<button type="button" class="pw-toggle" data-target="new-pw" aria-label="Show password">
+								<svg class="eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+								<svg class="eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+							</button>
+						</div>
+						<div class="pw-strength">
+							<div class="pw-strength-bar"><div class="pw-strength-fill" id="pw-strength-fill"></div></div>
+							<span class="pw-strength-label" id="pw-strength-label"></span>
+						</div>
+					</div>
+					<div class="input-group">
+						<label for="confirm-pw">Confirm New Password</label>
+						<div class="pw-input-wrap">
+							<input type="password" id="confirm-pw" required minlength="8" placeholder="Re-enter new password" autocomplete="new-password" />
+							<button type="button" class="pw-toggle" data-target="confirm-pw" aria-label="Show password">
+								<svg class="eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+								<svg class="eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+							</button>
+						</div>
+						<div class="pw-match" id="pw-match-msg"></div>
+					</div>
+					<div class="pw-requirements">
+						<div class="req-item" id="req-length"><span class="req-icon">○</span> At least 8 characters</div>
+						<div class="req-item" id="req-upper"><span class="req-icon">○</span> One uppercase letter</div>
+						<div class="req-item" id="req-lower"><span class="req-icon">○</span> One lowercase letter</div>
+						<div class="req-item" id="req-number"><span class="req-icon">○</span> One number</div>
+					</div>
+					<div class="modal-error" id="change-pw-error"></div>
+					<div class="modal-success" id="change-pw-success"></div>
+					<button type="submit" class="modal-submit" id="change-pw-submit" disabled>
+						<span class="btn-text">Update Password</span>
+						<span class="btn-spinner" style="display:none"></span>
+					</button>
+				</form>
+			</div>
+
+			<!-- ====== STEP 3: Success ====== -->
+			<div class="modal-step" id="step-success" style="display:none">
+				<div class="modal-icon icon-done">
+					<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+				</div>
+				<h3>Password Updated!</h3>
+				<p class="modal-desc">Your password has been changed successfully.</p>
+				<button class="modal-submit" id="success-close-btn">Done</button>
+			</div>
+		</div>
+	</div>
+
 	<script>
 	// ============================================================
 	// Profile Page — Populate from localStorage + fetch fresh data
@@ -120,13 +212,11 @@
 		const displayName = document.getElementById('profile-display-name');
 		const displayRole = document.getElementById('profile-display-role');
 		const usernameEl  = document.getElementById('profile-username');
-		const userIdEl    = document.getElementById('profile-user-id');
 		const statusEl    = document.getElementById('profile-status');
 
 		if (displayName) displayName.textContent = (user.first_name || '') + ' ' + (user.last_name || '');
 		if (displayRole) displayRole.textContent = (user.role || 'user').toUpperCase();
 		if (usernameEl)  usernameEl.textContent  = user.username || '—';
-		if (userIdEl)    userIdEl.textContent     = user.user_id || '—';
 		if (statusEl)    statusEl.textContent     = user.is_active ? '● Active' : '○ Inactive';
 
 		// Right panel — account info
@@ -185,6 +275,254 @@
 			console.warn('Could not fetch fresh profile:', err);
 		}
 	});
+
+	// ============================================================
+	// Two-Step Change Password Modal (Verify → Set New Password)
+	// ============================================================
+	(() => {
+		const overlay   = document.getElementById('pw-modal-overlay');
+		const openBtn   = document.getElementById('open-pw-modal');
+		const closeBtn  = document.getElementById('close-pw-modal');
+
+		// Steps
+		const stepVerify  = document.getElementById('step-verify');
+		const stepChange  = document.getElementById('step-change');
+		const stepSuccess = document.getElementById('step-success');
+
+		// Step 1 elements
+		const verifyForm  = document.getElementById('verify-pw-form');
+		const oldPwInput  = document.getElementById('verify-old-pw');
+		const verifyError = document.getElementById('verify-pw-error');
+		const verifyBtn   = document.getElementById('verify-pw-submit');
+
+		// Step 2 elements
+		const changeForm    = document.getElementById('change-pw-form');
+		const newPwInput    = document.getElementById('new-pw');
+		const confirmInput  = document.getElementById('confirm-pw');
+		const strengthFill  = document.getElementById('pw-strength-fill');
+		const strengthLabel = document.getElementById('pw-strength-label');
+		const matchMsg      = document.getElementById('pw-match-msg');
+		const changeError   = document.getElementById('change-pw-error');
+		const changeSuccess = document.getElementById('change-pw-success');
+		const changeBtn     = document.getElementById('change-pw-submit');
+
+		// Step 3
+		const successCloseBtn = document.getElementById('success-close-btn');
+
+		let verifiedOldPw = '';
+
+		// --- Modal open/close ---
+		function showStep(step) {
+			[stepVerify, stepChange, stepSuccess].forEach(s => s.style.display = 'none');
+			step.style.display = '';
+		}
+
+		function openModal() {
+			verifiedOldPw = '';
+			oldPwInput.value = '';
+			newPwInput.value = '';
+			confirmInput.value = '';
+			verifyError.textContent = ''; verifyError.style.display = 'none';
+			changeError.textContent = ''; changeError.style.display = 'none';
+			changeSuccess.textContent = ''; changeSuccess.style.display = 'none';
+			resetStrength();
+			resetRequirements();
+			matchMsg.textContent = ''; matchMsg.className = 'pw-match';
+			changeBtn.disabled = true;
+			showStep(stepVerify);
+			overlay.classList.add('active');
+			setTimeout(() => oldPwInput.focus(), 150);
+		}
+
+		function closeModal() {
+			overlay.classList.remove('active');
+		}
+
+		openBtn.addEventListener('click', openModal);
+		closeBtn.addEventListener('click', closeModal);
+		// Only close on overlay click if mousedown also started on overlay (prevents drag-outside dismiss)
+		let mouseDownOnOverlay = false;
+		overlay.addEventListener('mousedown', (e) => { mouseDownOnOverlay = (e.target === overlay); });
+		overlay.addEventListener('mouseup', (e) => {
+			if (mouseDownOnOverlay && e.target === overlay) closeModal();
+			mouseDownOnOverlay = false;
+		});
+		document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+		successCloseBtn.addEventListener('click', closeModal);
+
+		// --- Toggle password visibility (all toggle buttons) ---
+		document.querySelectorAll('.pw-toggle').forEach(btn => {
+			btn.addEventListener('click', () => {
+				const input = document.getElementById(btn.dataset.target);
+				const isHidden = input.type === 'password';
+				input.type = isHidden ? 'text' : 'password';
+				btn.querySelector('.eye-open').style.display = isHidden ? 'none' : '';
+				btn.querySelector('.eye-closed').style.display = isHidden ? '' : 'none';
+			});
+		});
+
+		// ========== STEP 1: Verify old password ==========
+		verifyForm.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const oldPw = oldPwInput.value.trim();
+			if (!oldPw) return;
+
+			const token = localStorage.getItem('access_token');
+			if (!token) { window.location.href = '/login'; return; }
+
+			verifyBtn.querySelector('.btn-text').style.display = 'none';
+			verifyBtn.querySelector('.btn-spinner').style.display = '';
+			verifyBtn.disabled = true;
+			verifyError.style.display = 'none';
+
+			try {
+				const userData = JSON.parse(localStorage.getItem('user_data') || '{}');
+				const res = await fetch(`${API_BASE}/api/auth/login`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ username: userData.username, password: oldPw })
+				});
+
+				if (res.ok) {
+					verifiedOldPw = oldPw;
+					showStep(stepChange);
+					setTimeout(() => newPwInput.focus(), 150);
+				} else {
+					verifyError.textContent = 'Incorrect password. Please try again.';
+					verifyError.style.display = 'block';
+					oldPwInput.focus();
+					oldPwInput.select();
+				}
+			} catch (err) {
+				verifyError.textContent = 'Connection error. Please try again.';
+				verifyError.style.display = 'block';
+			} finally {
+				verifyBtn.querySelector('.btn-text').style.display = '';
+				verifyBtn.querySelector('.btn-spinner').style.display = 'none';
+				verifyBtn.disabled = false;
+			}
+		});
+
+		// ========== STEP 2: Set new password ==========
+		const reqs = {
+			length: { el: document.getElementById('req-length'), test: v => v.length >= 8 },
+			upper:  { el: document.getElementById('req-upper'),  test: v => /[A-Z]/.test(v) },
+			lower:  { el: document.getElementById('req-lower'),  test: v => /[a-z]/.test(v) },
+			number: { el: document.getElementById('req-number'), test: v => /\d/.test(v) },
+		};
+
+		function checkRequirements(pw) {
+			for (const [, req] of Object.entries(reqs)) {
+				const ok = req.test(pw);
+				req.el.classList.toggle('met', ok);
+				req.el.querySelector('.req-icon').textContent = ok ? '●' : '○';
+			}
+		}
+
+		function updateStrength(pw) {
+			if (!pw) { resetStrength(); return; }
+			let score = 0;
+			if (pw.length >= 8) score++;
+			if (pw.length >= 12) score++;
+			if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
+			if (/\d/.test(pw)) score++;
+			if (/[^A-Za-z0-9]/.test(pw)) score++;
+			const levels = [
+				{ label: 'Weak',      color: '#ef4444', width: '20%' },
+				{ label: 'Fair',      color: '#f59e0b', width: '40%' },
+				{ label: 'Good',      color: '#3b82f6', width: '65%' },
+				{ label: 'Strong',    color: '#22c55e', width: '85%' },
+				{ label: 'Excellent', color: '#16a34a', width: '100%' },
+			];
+			const lvl = levels[Math.min(score, levels.length) - 1] || levels[0];
+			strengthFill.style.width = lvl.width;
+			strengthFill.style.background = lvl.color;
+			strengthLabel.textContent = lvl.label;
+			strengthLabel.style.color = lvl.color;
+		}
+
+		function resetStrength() {
+			strengthFill.style.width = '0';
+			strengthLabel.textContent = '';
+		}
+
+		function resetRequirements() {
+			document.querySelectorAll('.req-item').forEach(el => {
+				el.classList.remove('met');
+				el.querySelector('.req-icon').textContent = '○';
+			});
+		}
+
+		function checkMatch() {
+			const c = confirmInput.value;
+			if (!c) { matchMsg.textContent = ''; matchMsg.className = 'pw-match'; return false; }
+			if (newPwInput.value === c) {
+				matchMsg.textContent = '✓ Passwords match';
+				matchMsg.className = 'pw-match match-ok';
+				return true;
+			}
+			matchMsg.textContent = '✗ Passwords do not match';
+			matchMsg.className = 'pw-match match-fail';
+			return false;
+		}
+
+		function validateForm() {
+			const pw = newPwInput.value;
+			const allMet = Object.values(reqs).every(r => r.test(pw));
+			const matching = pw && pw === confirmInput.value;
+			changeBtn.disabled = !(allMet && matching);
+		}
+
+		newPwInput.addEventListener('input', () => {
+			checkRequirements(newPwInput.value);
+			updateStrength(newPwInput.value);
+			checkMatch();
+			validateForm();
+		});
+		confirmInput.addEventListener('input', () => { checkMatch(); validateForm(); });
+
+		changeForm.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const newPw = newPwInput.value;
+			if (newPw !== confirmInput.value) return;
+
+			const token = localStorage.getItem('access_token');
+			if (!token) { window.location.href = '/login'; return; }
+
+			changeError.style.display = 'none';
+			changeSuccess.style.display = 'none';
+			changeBtn.querySelector('.btn-text').style.display = 'none';
+			changeBtn.querySelector('.btn-spinner').style.display = '';
+			changeBtn.disabled = true;
+
+			try {
+				const res = await fetch(`${API_BASE}/api/auth/change-password`, {
+					method: 'PUT',
+					headers: {
+						'Content-Type': 'application/json',
+						'Authorization': 'Bearer ' + token
+					},
+					body: JSON.stringify({ old_password: verifiedOldPw, new_password: newPw })
+				});
+
+				const data = await res.json();
+				if (res.ok) {
+					showStep(stepSuccess);
+				} else {
+					changeError.textContent = data.detail || 'Failed to change password.';
+					changeError.style.display = 'block';
+				}
+			} catch (err) {
+				changeError.textContent = 'Connection error. Please try again.';
+				changeError.style.display = 'block';
+			} finally {
+				changeBtn.querySelector('.btn-text').style.display = '';
+				changeBtn.querySelector('.btn-spinner').style.display = 'none';
+				validateForm();
+			}
+		});
+	})();
 	</script>
+	<script defer src="../shared/notifications.js"></script>
 </body>
 </html>
