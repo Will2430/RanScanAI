@@ -460,14 +460,14 @@ async def save_scan_history(
         user_id=user_id,  # ✨ NEW: Set user_id
         file_path=file_path,
         file_name=Path(file_path).name,
-        file_size=result.get('file_size', result.get('features_count', 0)),
+        file_size=result.get('file_size') or result.get('features_count') or 0,
         file_hash=file_hash,
         is_malicious=result['is_malicious'],
         confidence=result['confidence'],
         prediction_label=result['prediction_label'],
         model_type=model_type,
         scan_time_ms=result['scan_time_ms'],
-        features_analyzed=result.get('features_count', result.get('file_size', 0)),
+        features_analyzed=result.get('features_count') or result.get('file_size') or 0,
         vt_detection_ratio=result.get('vt_detection_ratio'),
         vt_data=result.get('vt_data')
     )

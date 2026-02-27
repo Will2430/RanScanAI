@@ -3,14 +3,16 @@ Monthly Reports API routes
 Aggregates scan_history records into monthly report summaries.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from datetime import datetime, date
 import calendar
 import logging
 
-from db_manager import get_session_maker, ScanHistory
+from db_manager import get_session_maker, ScanHistory, User
+from auth.routes import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +90,10 @@ def _report_id(index: int) -> str:
 @router.get("", response_model=ReportsListResponse)
 async def list_reports(
     limit: int = Query(12, ge=1, le=60, description="Max months to return"),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Return a list of months that have scan data, newest first.
+    Return a list of months that have scan data for the authenticated user, newest first.
     Each entry is an aggregated monthly summary.
     """
     from sqlalchemy import select, func, extract, Integer, cast, case
@@ -99,7 +102,7 @@ async def list_reports(
 
     try:
         async with SessionLocal() as session:
-            # Group scan_history rows by year + month
+            # Group scan_history rows by year + month, filtered by user
             yr_col = extract("year",  ScanHistory.timestamp).label("yr")
             mo_col = extract("month", ScanHistory.timestamp).label("mo")
 
@@ -112,6 +115,7 @@ async def list_reports(
                         case((ScanHistory.is_malicious == True, 1), else_=0)
                     ).label("malicious"),
                 )
+                .where(ScanHistory.user_id == current_user.user_id)
                 .group_by(yr_col, mo_col)
                 .order_by(yr_col.desc(), mo_col.desc())
                 .limit(limit)
@@ -150,7 +154,11 @@ async def list_reports(
 
 
 @router.get("/{year}/{month}", response_model=ReportDetail)
-async def get_report_detail(year: int, month: int):
+async def get_report_detail(
+    year: int,
+    month: int,
+    current_user: User = Depends(get_current_user),
+):
     """
     Return all scan records for the given year/month.
     """
@@ -165,6 +173,7 @@ async def get_report_detail(year: int, month: int):
         async with SessionLocal() as session:
             stmt = (
                 select(ScanHistory)
+                .where(ScanHistory.user_id == current_user.user_id)
                 .where(extract("year",  ScanHistory.timestamp) == year)
                 .where(extract("month", ScanHistory.timestamp) == month)
                 .order_by(desc(ScanHistory.timestamp))
@@ -214,6 +223,7 @@ async def get_report_detail(year: int, month: int):
                         )
                     )
                 )
+                .where(ScanHistory.user_id == current_user.user_id)
                 .where(
                     (extract("year",  ScanHistory.timestamp) * 100 +
                      extract("month", ScanHistory.timestamp))
