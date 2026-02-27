@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>RanScanAI - Detection Details</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+	<link rel="stylesheet" href="RSA_viewlatestdetectiondetails.css" />
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <a class="logo" href="../userdashboard_page/RSA_userdashboard.html" aria-label="Go to dashboard">
+                <img src="../userdashboard_page/RSA_logo.png" alt="RanScanAI logo" class="logo-img" />
+                <span class="logo-text"><span class="logo-ran">Ran</span><span class="logo-scan">Scan</span><span class="logo-ai">AI</span></span>
+            </a>
+            <span class="header-divider"></span>
+            <span class="header-page-title">Incident Details</span>
+        </div>
+        <div class="header-right">
+            <button class="icon-btn bell-btn" aria-label="Notifications">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <span class="notif-dot"></span>
+            </button>
+            <a class="icon-btn user-btn" href="../userprofile_page/RSA_userprofile.html" aria-label="User profile">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </a>
+        </div>
+    </header>
+
+	<main class="page-wrap">
+        <div class="page-title">
+            <a class="back-link" href="../userdashboard_page/RSA_userdashboard.html" aria-label="Back to dashboard">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                <span>Back to Dashboard</span>
+            </a>
+            <h1>Incident Details</h1>
+		</div>
+        
+        <div class="details-grid">
+            <!-- Summary Card -->
+            <section class="details-card summary-card">
+                <div class="card-header">
+                    <h2>Threat Summary</h2>
+                    <span class="severity-badge severity-critical">CRITICAL</span>
+                </div>
+                <div class="summary-content">
+                    <div class="summary-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                    <div class="summary-info">
+                        <h3 class="threat-name">ransomransom.exe</h3>
+                        <p class="threat-type">Ransomware / File Encryptor</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Info Card -->
+            <section class="details-card info-card">
+                <h2>Detection Information</h2>
+                <div class="info-list">
+                    <div class="info-row">
+                        <span class="info-label">Detection ID</span>
+                        <span class="info-value">D014</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date</span>
+                        <span class="info-value">4 March 2026</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Time</span>
+                        <span class="info-value">19:05:36</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Device</span>
+                        <span class="info-value">LBJ - PC02</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Status</span>
+                        <span class="info-value status-quarantined">Quarantined</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- File Details Card -->
+            <section class="details-card file-card">
+                <h2>File Details</h2>
+                <div class="info-list">
+                    <div class="info-row">
+                        <span class="info-label">File Path</span>
+                        <span class="info-value file-path">C:\Users\Admin\Downloads\ransomransom.exe</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">File Size</span>
+                        <span class="info-value">2.4 MB</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">SHA-256</span>
+                        <span class="info-value hash-value">e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</span>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Action Card -->
+            <section class="details-card action-card">
+                <h2>Recommended Actions</h2>
+                <p class="action-desc">The threat has been isolated. Please review the file details and choose an action.</p>
+                <div class="action-buttons">
+                    <button class="btn btn-danger">Delete File</button>
+                    <button class="btn btn-secondary">Restore (Not Recommended)</button>
+                </div>
+            </section>
+        </div>
+	</main>
+</body>
+</html>
