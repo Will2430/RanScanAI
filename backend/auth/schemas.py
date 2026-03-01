@@ -63,6 +63,7 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     phone_number: Optional[str] = Field(None, max_length=20)
     is_active: Optional[bool] = None
+    role: Optional[str] = Field(None, pattern='^(admin|user)$')
     
     class Config:
         json_schema_extra = {
@@ -71,7 +72,32 @@ class UserUpdate(BaseModel):
                 "first_name": "John",
                 "last_name": "Smith",
                 "phone_number": "+1234567890",
-                "is_active": True
+                "is_active": True,
+                "role": "user"
+            }
+        }
+
+
+class ChangePasswordRequest(BaseModel):
+    """
+    Schema for changing user password
+    """
+    old_password: str = Field(..., description="Current password for verification")
+    new_password: str = Field(..., min_length=8, description="New password (min 8 characters)")
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_new_password(cls, v, info):
+        """Ensure new password is different from old password"""
+        if 'old_password' in info.data and v == info.data['old_password']:
+            raise ValueError('New password must be different from old password')
+        return v
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "old_password": "OldPass123!",
+                "new_password": "NewSecurePass456!"
             }
         }
 

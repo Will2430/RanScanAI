@@ -1,0 +1,26 @@
+@font-face {
+  font-family: 'Arbutus';
+  src: url('./Arbutus-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-size: 32px;
+}
+
+.arbutus-font {
+  font-family: 'Arbutus', sans-serif;
+}
+
+@font-face {
+  font-family: 'CourierPrime';
+  src: url(./CourierPrime-Regular.ttf) format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-size: 32px;
+}
+
+.courierprime-font {
+  font-family: 'CourierPrime', monospace;
+}
+
+
+

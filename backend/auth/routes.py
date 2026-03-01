@@ -8,15 +8,18 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import logging
+
+# Malaysia timezone (UTC+8)
+MYT = timezone(timedelta(hours=8))
 import uuid
 
 from db_manager import get_session, User
 from .utils import hash_password, verify_password, create_access_token, decode_access_token
 from .schemas import (
     UserCreate, LoginRequest, UserResponse, Token, 
-    MessageResponse, ErrorResponse, UserUpdate
+    MessageResponse, ErrorResponse, UserUpdate, ChangePasswordRequest
 )
 
 logger = logging.getLogger(__name__)
@@ -134,8 +137,19 @@ async def login(
             detail="Account is inactive. Please contact administrator."
         )
     
-    # Note: last_login update disabled due to SQLAlchemy greenlet issues
-    # Can be updated via separate background task or admin endpoint if needed
+    # Update last_login timestamp
+    try:
+        await db.execute(
+            update(User)
+            .where(User.user_id == user.user_id)
+            .values(last_login=datetime.now(MYT))
+        )
+        await db.commit()
+        await db.refresh(user)
+        logger.info(f"last_login updated for user: {user.username} -> {user.last_login}")
+    except Exception as e:
+        logger.error(f"Failed to update last_login for {user.username}: {e}")
+        await db.rollback()
     
     # Create JWT token
     token_data = {
@@ -372,6 +386,8 @@ async def update_user(
         user.phone_number = user_update.phone_number
     if user_update.is_active is not None:
         user.is_active = user_update.is_active
+    if user_update.role is not None:
+        user.role = user_update.role
     
     user.updated_at = datetime.utcnow()
     
@@ -433,3 +449,37 @@ async def delete_user(
     logger.warning(f"Admin '{admin.username}' deleted user: {username}")
     
     return MessageResponse(message=f"User '{username}' deleted successfully")
+
+
+@router.put("/change-password", response_model=MessageResponse,
+            responses={
+                400: {"model": ErrorResponse, "description": "Invalid old password or validation error"},
+                401: {"model": ErrorResponse, "description": "Not authenticated"}
+            })
+async def change_password(
+    password_data: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Change current user's password
+    
+    Requires the old password for verification and a new password.
+    The new password must be at least 8 characters and different from the old password.
+    """
+    # Verify old password
+    if not verify_password(password_data.old_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    
+    # Hash and update new password
+    current_user.password_hash = hash_password(password_data.new_password)
+    current_user.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    
+    logger.info(f"User '{current_user.username}' changed their password")
+    
+    return MessageResponse(message="Password changed successfully")
