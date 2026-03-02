@@ -344,6 +344,7 @@
     border-radius: 8px;
     padding: 20px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
 }
 
 .table-section h3 {
@@ -434,13 +435,13 @@
 }
 
 .status-badge.status-malware {
-    background-color: #ffe0e0;
-    color: #C83A2B;
+    background-color: #C83A2B;
+    color: #ffffff;
 }
 
 .status-badge.status-benign {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: #28a745;
+    color: #ffffff;
 }
 
 .severity-badge.low {
