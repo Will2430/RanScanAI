@@ -147,6 +147,10 @@ class ScanHistory(Base):
     # Example: "45/70" means 45 out of 70 engines detected it
     vt_data: Mapped[Optional[Dict]] = mapped_column(JSON, nullable=True)
 
+    # Admin review (for uncertain samples)
+    admin_review: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    admin_decision_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
     # Relationships to child tables (one scan → many related records)
     terminal_logs: Mapped[list["TerminalLog"]] = relationship("TerminalLog", back_populates="scan", cascade="all, delete-orphan", passive_deletes=True)
     uncertain_samples: Mapped[list["UncertainSampleQueue"]] = relationship("UncertainSampleQueue", back_populates="scan", cascade="all, delete-orphan", passive_deletes=True)

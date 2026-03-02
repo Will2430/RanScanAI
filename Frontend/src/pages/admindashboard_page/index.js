@@ -5,6 +5,8 @@ import DashboardHeader from './components/DashboardHeader';
 import StatCard from './components/StatCard';
 import ChartSection from './components/ChartSection';
 import DataTable from './components/DataTable';
+import UncertainSample from './components/UncertainSample';
+import MonthlyUserReport from './components/MonthlyUserReport';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
 
@@ -175,6 +177,16 @@ const AdminDash = () => {
                         <div className="table-section">
                             <h3>All Detection History</h3>
                             <DataTable data={tableData} />
+                        </div>
+
+                        {/* Uncertain Samples Review */}
+                        <div className="table-section">
+                            <UncertainSample />
+                        </div>
+
+                        {/* Monthly User Report */}
+                        <div className="table-section">
+                            <MonthlyUserReport />
                         </div>
                     </>
                 )}
