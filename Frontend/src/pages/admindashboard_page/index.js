@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import './AdminDash.css';
 import DashboardHeader from './components/DashboardHeader';
 import StatCard from './components/StatCard';
+import ScanFile from './components/ScanFile';
 import ChartSection from './components/ChartSection';
 import DataTable from './components/DataTable';
 import UncertainSample from './components/UncertainSample';
@@ -161,11 +162,14 @@ const AdminDash = () => {
                     </div>
                 ) : (
                     <>
-                        {/* Statistics Cards */}
-                        <div className="stats-grid">
-                            {stats.map((stat, index) => (
-                                <StatCard key={index} {...stat} />
-                            ))}
+                        {/* Statistics Cards + Scan Panel Container */}
+                        <div className="stats-scan-container">
+                            <div className="stats-grid">
+                                {stats.map((stat, index) => (
+                                    <StatCard key={index} {...stat} />
+                                ))}
+                            </div>
+                            <ScanFile />
                         </div>
 
                         {/* Charts Section */}
