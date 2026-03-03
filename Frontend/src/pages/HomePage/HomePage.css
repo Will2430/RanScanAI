@@ -354,6 +354,7 @@ textarea:focus {
   text-align: center;
   box-shadow: 0 0 15px rgba(0, 170, 255, 0.4);
   transition: all 0.3s ease;
+  color: #fff;
 }
 
 
