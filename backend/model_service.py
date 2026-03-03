@@ -20,9 +20,11 @@ import os
 import tempfile
 import subprocess
 import json
+import asyncio
 import hashlib
 import pickle
 from datetime import datetime
+from fastapi.responses import StreamingResponse
 
 
 # Add workspace root to path for testing_code imports
@@ -69,6 +71,7 @@ vocab = {}  # API vocabulary loaded from api_vocab_fixed.pkl
 
 # Feature extraction config
 N_FEATURES = 67  # PE extractor produces 67 features (53 static + 14 behavioral, cleaned)
+MAX_SEQUENCE_LENGTH = 3000  # CNN was trained on 3000-call windows
 
 # Staged analysis thresholds
 # ADJUSTED: Model trained on Zenodo may be overconfident on real PE features
@@ -116,7 +119,8 @@ try:
         get_session, 
         save_terminal_log, 
         save_scan_history,
-        save_behavioral_patterns
+        save_behavioral_patterns,
+        User
     )
     from terminal_logger import LoggingCapture, format_scan_output
     DB_AVAILABLE = True
@@ -124,6 +128,32 @@ try:
 except ImportError as e:
     logger.warning(f"Database modules not available: {e}")
     AsyncSession = None  # Dummy type for function signatures
+
+# Import database functions
+from db_manager import get_session, save_scan_history, get_scan_history, User
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+# Import authentication router
+try:
+    logger.info("Attempting to import auth_routes...")
+    from auth import auth_router, get_current_user, get_current_admin
+    logger.info(f"✓ Auth routes imported successfully (router type: {type(auth_router)})")
+except ImportError as e:
+    logger.error(f"❌ Auth routes import failed (ImportError): {e}")
+    logger.warning("Auth routes not available - authentication disabled")
+    import traceback
+    traceback.print_exc()
+    auth_router = None
+    get_current_user = None
+    get_current_admin = None
+except Exception as e:
+    logger.error(f"❌ Unexpected error importing auth routes: {e}")
+    import traceback
+    traceback.print_exc()
+    auth_router = None
+    get_current_user = None
+    get_current_admin = None
 
 try:
     from pe_feature_extractor import PEFeatureExtractor
@@ -476,10 +506,12 @@ def convert_complete_analysis_to_vt_format(complete_data: dict) -> dict:
     net_dns = ml_features.get('api_network_dns', 0)
     net_threats = 0
     # If C2 pattern was detected but psutil/frida missed the actual connections, apply a floor
-    if patterns.get('network_c2_communication') and net_connections == 0:
+    _c2 = patterns.get('network_c2_communication', False)
+    _c2_detected = bool(_c2.get('detected', False)) if isinstance(_c2, dict) else bool(_c2)
+    if _c2_detected and net_connections == 0:
         net_connections = 10
         net_threats = 1
-    if patterns.get('network_c2_communication') and net_dns == 0:
+    if _c2_detected and net_dns == 0:
         net_dns = 50   # Conservative floor for DNS
 
     # --- processes ---
@@ -497,6 +529,9 @@ def convert_complete_analysis_to_vt_format(complete_data: dict) -> dict:
     # --- dlls / apis ---
     dll_count = ml_features.get('dll_load_count', 0)
     api_count = ml_features.get('api_sequence_length', 0)
+
+    # Helper: extract bool from either new rich-dict or legacy-bool pattern format
+    def _pv(v): return bool(v.get('detected', False)) if isinstance(v, dict) else bool(v)
 
     vt_format = {
         'behavior': {
@@ -523,7 +558,7 @@ def convert_complete_analysis_to_vt_format(complete_data: dict) -> dict:
             'dlls': dll_count,
             'apis': api_count
         },
-        'tags': [k for k, v in patterns.items() if v],
+        'tags': [k for k, v in patterns.items() if _pv(v)],
         'source': 'vm_complete_analyzer'
     }
 
@@ -598,19 +633,44 @@ def sequence_to_indices(api_sequence):
             indices.append(vocab.get(api_lower, 1))  # 1 = <UNK>
         return indices
     
-def pad_sequence(sequence):
-        max_sequence_length = 15000
-        """Pad sequence to max_sequence_length."""
-        padded = np.zeros((1, max_sequence_length), dtype=np.int32)
-        
-        if len(sequence) > max_sequence_length:
-            # Truncate from the beginning (keep most recent calls)
-            padded[0] = sequence[-max_sequence_length:]
-        else:
-            # Pad at the beginning
-            padded[0, -len(sequence):] = sequence
-        
-        return padded
+def pad_single_window(sequence):
+    """Pad a single sequence (already <= MAX_SEQUENCE_LENGTH) with right-padding."""
+    L = MAX_SEQUENCE_LENGTH
+    padded = np.zeros((1, L), dtype=np.int32)
+    n = len(sequence)
+    padded[0, :n] = sequence
+
+    return padded
+
+
+def extract_windows(sequence, stride=500):
+    """Slide 3000-call windows across the full sequence.
+
+    The model was trained on 3000-call windows — inference must match.
+    A single head+tail splice misses entire execution phases in the middle.
+    Instead: predict on every window, return max malicious probability
+    (conservative: if ANY phase looks malicious, flag the file).
+    """
+    L = MAX_SEQUENCE_LENGTH
+    n = len(sequence)
+
+    if n <= L:
+        # Short sequence — single padded window, same as training
+        return [pad_single_window(sequence)]
+
+    windows = []
+    for start in range(0, n - L + 1, stride):
+        w = sequence[start : start + L]
+        windows.append(pad_single_window(w))
+
+    # Always include the tail window (payload phase)
+    tail = sequence[n - L:]
+    tail_padded = pad_single_window(tail)
+    # Avoid duplicate if stride already aligned to tail
+    if not np.array_equal(tail_padded, windows[-1]):
+        windows.append(tail_padded)
+
+    return windows
 
 
 @app.on_event("startup")
@@ -1006,317 +1066,304 @@ async def predict_from_features(request: PredictRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/predict/staged", response_model=PredictResponse)
+@app.post("/predict/staged")
 async def predict_staged(
     file: UploadFile = File(...),
-    run_sandbox: bool = True,  # Explicit opt-in for sandbox (dangerous!)
-    db: Optional[AsyncSession] = Depends(get_db_session)
+    run_sandbox: bool = True,
+    user_id: Optional[str] = None,
+    db: Optional[AsyncSession] = Depends(get_db_session),
 ):
     """
-    Three-Stage Detection with Soft Voting Ensemble
-    
-    Stage 1: Static PE triage (XGBoost on all 67 features, behavioral zeros)
-      - Provides initial assessment (logged but doesn't block sandbox)
-      
-    Sandbox: vm_complete_analyzer.py (if run_sandbox=True)
-      - Executes malware, captures behavioral aggregates + API sequences
-      - Always triggered when run_sandbox=True (confidence checking disabled)
-      
-    Stage 1.5: XGBoost enriched (67 features with real behavioral data)
-    Stage 2: 1D CNN on API sequences
-      - Run in parallel after sandbox execution
-    
-    Soft Voting: Average predictions from Stage 1.5 and Stage 2
-      - Final_prob = (xgboost_prob + cnn_prob) / 2
-      - Reduces false negatives through model diversity
-    
-    Args:
-        file: Uploaded file (PE executable)
-        run_sandbox: If True, enable sandbox execution
-                    WARNING: Executes malware! Use only in isolated VM
-        db: Database session for logging
-        
-    Returns:
-        Prediction results with soft voting if sandbox was triggered
+    Three-Stage Detection with Soft Voting Ensemble.
+
+    Returns a Server-Sent Events stream directly on this POST response.
+    Event types:
+      - log    → {"type": "log",    "msg": "..."}
+      - result → {"type": "result", "data": {...}}
+      - error  → {"type": "error",  "msg": "...", "status": N}
     """
-    start_time = time.time()
-    
-    # Start logging capture if database available
-    log_capture = None
-    if DB_AVAILABLE:
-        log_capture = LoggingCapture(__name__)
-        log_capture.__enter__()
-    
-    try:
-        file_bytes = await file.read()
-        
-        # === STAGE 1: Static PE Triage ===
-        logger.info(f"🔍 Stage 1: Static PE analysis on {file.filename or 'uploaded_file'}")
-        features_full = extract_pe_features_from_bytes(file_bytes, file.filename or "uploaded_file")
-        
-        if features_full is None:
-            raise HTTPException(status_code=400, detail="PE extraction failed")
-        
-        # CRITICAL: XGBoost model was trained on ALL 67 features (53 static + 14 behavioral)
-        # Stage 1 fast triage: Use all features but behavioral features will be zeros (not yet enriched)
-        # This is more honest than subsetting features - model sees full feature space
-        
-        # Scale and predict (Stage 1 - all features, behavioral zeros)
-        if scaler is not None:
-            try:
-                # Create feature DataFrame with all features
-                features_df = pd.DataFrame(features_full.reshape(1, -1), columns=pe_extractor.FEATURE_NAMES)
-                features_scaled = scaler.transform(features_df)
-            except Exception as e:
-                logger.warning(f"Scaler error: {e} - using basic normalization")
-                features_scaled = normalize_pe_features(features_full).reshape(1, -1)
-        else:
-            features_scaled = normalize_pe_features(features_full).reshape(1, -1)
-        
-        # XGBoost prediction (behavioral features are zeros at this stage)
-        stage1_proba = model.predict_proba(features_scaled)
-        stage1_prob = float(stage1_proba[0][1])
-        stage1_confidence = stage1_prob if stage1_prob >= 0.5 else (1 - stage1_prob)
-        
-        logger.info(f"   Stage 1 result: raw_score={stage1_prob:.3f}, confidence={stage1_confidence:.3f}({'MALICIOUS' if stage1_prob >= 0.5 else 'CLEAN'})")
-        
-        # === SANDBOX CHECK ===
-        if not run_sandbox:
-            logger.warning("⚠️  Sandbox disabled - returning Stage 1 result only")
-            logger.warning("    Set run_sandbox=true to enable behavioral analysis")
-            scan_time = (time.time() - start_time) * 1000
-            is_malicious = stage1_prob >= 0.5
-            
-            return PredictResponse(
-                is_malicious=is_malicious,
-                confidence=float(stage1_confidence),
-                prediction_label="MALICIOUS" if is_malicious else "CLEAN",raw_score=float(stage1_prob),
-                detection_method="stage1_no_sandbox",
-                scan_time_ms=round(scan_time, 2),
-                pe_features_extracted=True
-            )
-        
-        logger.info(f"🔬 Triggering sandbox analysis (Stage 1: {stage1_prob:.2%} malicious)")
-        
-        # Save file for sandbox in project-local folder (avoids %TEMP% AV interference)
-        # Preserve the original filename stem so _SIMULATOR_STEMS matching in vm_complete_analyzer
-        # works correctly (e.g. System_Update.exe triggers --auto-run + correct watch_dir).
-        temp_dir = Path(__file__).parent / "temp_scans"
-        temp_dir.mkdir(exist_ok=True)
-        original_stem = Path(file.filename or "sandbox_target").stem
-        tmp_path = str(temp_dir / f"{original_stem}.exe")
-        logger.info(f"   Sandbox file: filename={file.filename!r}  stem={original_stem!r}  path={tmp_path}")
-        with open(tmp_path, "wb") as _f:
-            _f.write(file_bytes)
-        
+    file_bytes = await file.read()
+    filename = file.filename or "uploaded_file"
+
+    async def _stream():
+        start_time = time.time()
+        log_capture = None
+        tmp_path: Optional[str] = None
+
+        def _emit(msg: dict) -> str:
+            return f"data: {json.dumps(msg)}\n\n"
+
         try:
-            # Run complete analyzer — needs 660s: EXE runs ~5-10min + Frida 600s tracer window
-            complete_data = run_complete_analysis(tmp_path, timeout=180)
-            
+            if DB_AVAILABLE:
+                log_capture = LoggingCapture(__name__)
+                log_capture.__enter__()
+
+            # ── STAGE 1: Static PE Triage ────────────────────────────────────
+            yield _emit({"type": "log", "msg": f"🔍 Stage 1: Static PE analysis on {filename}"})
+            logger.info(f"🔍 Stage 1: Static PE analysis on {filename}")
+
+            features_full = extract_pe_features_from_bytes(file_bytes, filename)
+            if features_full is None:
+                yield _emit({"type": "error", "msg": "PE extraction failed", "status": 400})
+                return
+
+            if scaler is not None:
+                try:
+                    features_df = pd.DataFrame(features_full.reshape(1, -1), columns=pe_extractor.FEATURE_NAMES)
+                    features_scaled = scaler.transform(features_df)
+                except Exception as _e:
+                    logger.warning(f"Scaler error: {_e} - using basic normalization")
+                    features_scaled = normalize_pe_features(features_full).reshape(1, -1)
+            else:
+                features_scaled = normalize_pe_features(features_full).reshape(1, -1)
+
+            stage1_proba = model.predict_proba(features_scaled)
+            stage1_prob = float(stage1_proba[0][1])
+            stage1_confidence = stage1_prob if stage1_prob >= 0.5 else (1 - stage1_prob)
+            stage1_label = "MALICIOUS" if stage1_prob >= 0.5 else "CLEAN"
+
+            yield _emit({"type": "log", "msg": f"   Stage 1: {stage1_label} (score={stage1_prob:.3f}, confidence={stage1_confidence:.3f})"})
+            logger.info(f"   Stage 1 result: raw_score={stage1_prob:.3f}, confidence={stage1_confidence:.3f}({stage1_label})")
+
+            # ── SANDBOX CHECK ───────────────────────────────────────────────
+            if not run_sandbox:
+                yield _emit({"type": "log", "msg": "⚠️  Sandbox disabled — returning Stage 1 result only"})
+                scan_time = (time.time() - start_time) * 1000
+                is_malicious = stage1_prob >= 0.5
+                result = {
+                    "is_malicious": is_malicious,
+                    "confidence": float(stage1_confidence),
+                    "prediction_label": "MALICIOUS" if is_malicious else "CLEAN",
+                    "raw_score": float(stage1_prob),
+                    "detection_method": "stage1_no_sandbox",
+                    "scan_time_ms": round(scan_time, 2),
+                    "pe_features_extracted": True,
+                    "scan_id": None,
+                }
+                yield _emit({"type": "result", "data": result})
+                return
+
+            yield _emit({"type": "log", "msg": f"🔬 Triggering sandbox (Stage 1: {stage1_prob:.2%} malicious) — please wait..."})
+            logger.info(f"🔬 Triggering sandbox analysis (Stage 1: {stage1_prob:.2%} malicious)")
+
+            temp_dir = Path(__file__).parent / "temp_scans"
+            temp_dir.mkdir(exist_ok=True)
+            original_stem = Path(filename).stem
+            tmp_path = str(temp_dir / f"{original_stem}.exe")
+            logger.info(f"   Sandbox file: filename={filename!r}  stem={original_stem!r}  path={tmp_path}")
+            with open(tmp_path, "wb") as _f:
+                _f.write(file_bytes)
+
+            yield _emit({"type": "log", "msg": "   ⏳ Sandbox running (this may take 3-10 minutes)..."})
+            complete_data = await asyncio.to_thread(run_complete_analysis, tmp_path, 180)
+
             if not complete_data:
+                yield _emit({"type": "log", "msg": "⚠️  Sandbox failed — falling back to Stage 1 result"})
                 logger.error("Sandbox analysis failed - falling back to Stage 1")
                 scan_time = (time.time() - start_time) * 1000
                 is_malicious = stage1_prob >= 0.5
-                
-                return PredictResponse(
-                    is_malicious=is_malicious,
-                    confidence=float(stage1_confidence),
-                    prediction_label="MALICIOUS" if is_malicious else "CLEAN",
-                    raw_score=float(stage1_prob),
-                    detection_method="stage1_sandbox_failed",
-                    scan_time_ms=round(scan_time, 2),
-                    pe_features_extracted=True
-                )
-            
-            # === STAGE 1.5: XGBoost with Behavioral Enrichment ===
-            logger.info(f"📊 Stage 1.5: XGBoost with behavioral aggregates")
-            
+                result = {
+                    "is_malicious": is_malicious,
+                    "confidence": float(stage1_confidence),
+                    "prediction_label": "MALICIOUS" if is_malicious else "CLEAN",
+                    "raw_score": float(stage1_prob),
+                    "detection_method": "stage1_sandbox_failed",
+                    "scan_time_ms": round(scan_time, 2),
+                    "pe_features_extracted": True,
+                    "scan_id": None,
+                }
+                yield _emit({"type": "result", "data": result})
+                return
+
+            # ── STAGE 1.5: XGBoost with Behavioral Enrichment ───────────────
+            yield _emit({"type": "log", "msg": "📊 Stage 1.5: XGBoost with behavioral aggregates"})
+            logger.info("📊 Stage 1.5: XGBoost with behavioral aggregates")
+
             vt_format = convert_complete_analysis_to_vt_format(complete_data)
             features_enriched = pe_extractor._enrich_with_vt(features_full, vt_format)
-            
-            # Scale and predict (Stage 1.5 - all 67 features)
+
             if scaler is not None:
                 try:
                     enriched_df = pd.DataFrame(features_enriched.reshape(1, -1), columns=pe_extractor.FEATURE_NAMES)
                     enriched_scaled = scaler.transform(enriched_df)
-                except Exception as e:
-                    logger.warning(f"Scaler error: {e} - using basic normalization")
+                except Exception as _e:
+                    logger.warning(f"Scaler error: {_e} - using basic normalization")
                     enriched_scaled = normalize_pe_features(features_enriched).reshape(1, -1)
             else:
                 enriched_scaled = normalize_pe_features(features_enriched).reshape(1, -1)
-            
+
             stage1_5_proba = model.predict_proba(enriched_scaled)
             stage1_5_prob = float(stage1_5_proba[0][1])
-
             stage1_5_confidence = stage1_5_prob if stage1_5_prob >= 0.5 else (1 - stage1_5_prob)
+            stage1_5_label = "MALICIOUS" if stage1_5_prob >= 0.5 else "CLEAN"
 
-            logger.info(f"   Stage 1.5 result: raw_score={stage1_5_prob:.3f}, confidence={stage1_5_confidence:.3f}({'MALICIOUS' if stage1_5_prob >= 0.5 else 'CLEAN'})")
-            
-            # === STAGE 2: 1D CNN on API Sequence ===
+            yield _emit({"type": "log", "msg": f"   Stage 1.5: {stage1_5_label} (score={stage1_5_prob:.3f}, confidence={stage1_5_confidence:.3f})"})
+            logger.info(f"   Stage 1.5 result: raw_score={stage1_5_prob:.3f}, confidence={stage1_5_confidence:.3f}({stage1_5_label})")
+
+            # ── STAGE 2: 1D CNN on API Sequence ────────────────────────────
             stage2_prob = None
             if cnn_model is not None:
-                logger.info(f"🧠 Stage 2: CNN on API sequence")
-                analysis_file = list(ANALYSIS_RESULTS_DIR.glob("complete_analysis_*.json"))
-                latest_analysis = max(analysis_file, key=lambda p: p.stat().st_mtime)
-
-                # Extract pattern from complete_analysis.json — saved later with scan_id
+                yield _emit({"type": "log", "msg": "🧠 Stage 2: CNN on API sequence"})
+                logger.info("🧠 Stage 2: CNN on API sequence")
                 api_sequence = complete_data.get('api_sequence', [])
                 if api_sequence and len(api_sequence) > 0:
                     try:
+                        analysis_files = list(ANALYSIS_RESULTS_DIR.glob("complete_analysis_*.json"))
+                        latest_analysis = max(analysis_files, key=lambda p: p.stat().st_mtime)
                         api_calls = extract_api_sequence(latest_analysis)
-
-                        # Convert to indices
                         indexed_sequence = sequence_to_indices(api_calls)
+                        windows = extract_windows(indexed_sequence, stride=500)
 
-                        # Pad sequence
-                        padded_sequence = pad_sequence(indexed_sequence)
+                        all_inputs = np.vstack(windows)
+                        logger.info("Making prediction...")
+                        all_proba = cnn_model.predict(all_inputs, verbose=0)[:, 0]
 
-                        # CNN prediction
-                        stage2_proba = cnn_model.predict(padded_sequence, verbose=0)
-
-                        # stage2_proba shape: (1, 2) softmax → index [1] = P(malicious)
-                        # (1, 1) sigmoid → index [0] = P(malicious) directly
-                        stage2_prob = float(stage2_proba[0][1] if stage2_proba.shape[1] > 1 else stage2_proba[0][0])
-
-                        # Confidence = how sure we are of the prediction (always in [0.5, 1.0])
+                        prediction_proba = float(np.max(all_proba))
+                        mean_proba = float(np.mean(all_proba))
+                        n_malicious_windows = int(np.sum(all_proba > 0.5))
+                        logger.info(
+                            f"  Window probabilities — max: {prediction_proba:.3f}, mean: {mean_proba:.3f}, "
+                            f"malicious windows: {n_malicious_windows}/{len(windows)}"
+                        )
+                        stage2_prob = prediction_proba
                         stage2_confidence = stage2_prob if stage2_prob >= 0.5 else (1 - stage2_prob)
-                        
-                        logger.info(f"  Stage 2 result: raw_score={stage2_prob:.3f}, confidence={stage2_confidence:.3f}({'MALICIOUS' if stage2_prob >= 0.5 else 'CLEAN'})")
-                    except Exception as e:
-                        logger.error(f"CNN prediction failed: {e}")
+                        stage2_label = "MALICIOUS" if stage2_prob >= 0.5 else "CLEAN"
+
+                        yield _emit({"type": "log", "msg": f"   Stage 2: {stage2_label} (score={stage2_prob:.3f}, confidence={stage2_confidence:.3f})"})
+                        logger.info(f"  Stage 2 result: raw_score={stage2_prob:.3f}, confidence={stage2_confidence:.3f}({stage2_label})")
+                    except Exception as _e:
+                        logger.error(f"CNN prediction failed: {_e}")
+                        yield _emit({"type": "log", "msg": f"   ⚠️  CNN prediction failed: {_e}"})
                         stage2_prob = None
                 else:
+                    yield _emit({"type": "log", "msg": "   ⚠️  No API sequence captured — skipping Stage 2"})
                     logger.warning("   No API sequence captured - skipping Stage 2")
             else:
+                yield _emit({"type": "log", "msg": "   ⚠️  CNN model not loaded — skipping Stage 2"})
                 logger.warning("   CNN model not loaded - skipping Stage 2")
-            
-            # === SOFT VOTING ENSEMBLE ===
+
+            # ── SOFT VOTING ENSEMBLE ────────────────────────────────────────
             if stage2_prob is not None:
-                # Average predictions from Stage 1.5 (XGBoost) and Stage 2 (CNN)
                 final_prob = (stage1_5_prob + stage2_prob) / 2
                 detection_method = "soft_voting_xgb_cnn"
+                yield _emit({"type": "log", "msg": f"🎯 Soft Voting: ({stage1_5_prob:.3f} + {stage2_prob:.3f}) / 2 = {final_prob:.3f}"})
                 logger.info(f"🎯 Soft Voting: ({stage1_5_prob:.3f} + {stage2_prob:.3f}) / 2 = {final_prob:.3f}")
             else:
-                # Fallback to Stage 1.5 only
                 final_prob = stage1_5_prob
                 detection_method = "stage1_5_enriched_only"
+                yield _emit({"type": "log", "msg": f"🎯 Stage 1.5 only (no CNN): {final_prob:.3f}"})
                 logger.info(f"🎯 Stage 1.5 only (no CNN): {final_prob:.3f}")
-            
+
             is_malicious = final_prob >= 0.5
             final_confidence = final_prob if is_malicious else (1 - final_prob)
             scan_time = (time.time() - start_time) * 1000
 
-            # === PERSIST TO DATABASE ===
-            # Save scan_history FIRST to get scan_id, then pass it to all child saves
-            scan_id = None
             file_hash = hashlib.sha256(file_bytes).hexdigest()
             result_dict = {
-                'is_malicious': bool(is_malicious),
-                'confidence': float(final_confidence),
-                'prediction_label': 'MALICIOUS' if is_malicious else 'CLEAN',
-                'scan_time_ms': scan_time,
-                'file_size': len(file_bytes),
-                'behavioral_enriched': True,
-                'behavioral_source': 'vm_complete_analyzer',
-                'detection_method': detection_method
+                "is_malicious": bool(is_malicious),
+                "confidence": float(final_confidence),
+                "prediction_label": "MALICIOUS" if is_malicious else "CLEAN",
+                "raw_score": float(final_prob),
+                "detection_method": detection_method,
+                "scan_time_ms": round(scan_time, 2),
+                "pe_features_extracted": True,
+                "behavioral_enriched": True,
+                "behavioral_source": "vm_complete_analyzer",
             }
-            if DB_AVAILABLE and db:
+
+            # ── PERSIST TO DATABASE ─────────────────────────────────────────
+            scan_id = None
+            if DB_AVAILABLE and db is not None:
                 try:
                     scan_entry = await save_scan_history(
+                        user_id=user_id,
                         session=db,
-                        file_path=file.filename or 'uploaded_file',
+                        file_path=filename,
                         file_hash=file_hash,
                         result=result_dict,
-                        model_type=f"Soft Voting ({detection_method})"
+                        model_type=f"Soft Voting ({detection_method})",
                     )
                     scan_id = scan_entry.id
                     logger.info(f"✓ Scan history saved (scan_id={scan_id})")
-                except Exception as db_error:
-                    logger.error(f"Failed to save scan history: {db_error}")
+                    yield _emit({"type": "log", "msg": f"✓ Scan history saved (id={scan_id})"})
+                except Exception as _dbe:
+                    logger.error(f"Failed to save scan history: {_dbe}")
 
-            # Save behavioral patterns (now with scan_id)
-            sandbox_patterns = complete_data.get('patterns', {})
-            if sandbox_patterns and db is not None and DB_AVAILABLE:
-                try:
-                    await save_behavioral_patterns(
-                        session=db,
-                        patterns=sandbox_patterns,
-                        file_name=file.filename or 'uploaded_file',
-                        file_hash=file_hash,
-                        detection_method='vm_complete_analyzer',
-                        risk_score=complete_data.get('risk_score'),
-                        scan_id=scan_id,
-                    )
-                    logger.info(f"🗂️  Behavioral patterns saved ({sum(v for v in sandbox_patterns.values() if isinstance(v, bool))} detected)")
-                except Exception as _pe:
-                    logger.error(f"Failed to save behavioral patterns: {_pe}")
+                sandbox_patterns = complete_data.get("patterns", {})
+                if sandbox_patterns:
+                    try:
+                        await save_behavioral_patterns(
+                            session=db,
+                            patterns=sandbox_patterns,
+                            file_name=filename,
+                            file_hash=file_hash,
+                            detection_method="vm_complete_analyzer",
+                            risk_score=complete_data.get("risk_score"),
+                            scan_id=scan_id,
+                        )
+                        logger.info("🗂️  Behavioral patterns saved")
+                    except Exception as _pe:
+                        logger.error(f"Failed to save behavioral patterns: {_pe}")
 
-            # === UNCERTAIN SAMPLE QUEUEING (based on soft voting confidence) ===
-            UNCERTAINTY_THRESHOLD = 0.85
-            if final_confidence < UNCERTAINTY_THRESHOLD and db is not None:
-                try:
-                    await queue_uncertain_sample_with_file(
-                        db=db,
-                        file_bytes=file_bytes,
-                        file_name=file.filename or 'uploaded_file',
-                        features=features_enriched,
-                        prediction_prob=final_prob,
-                        behavioral_enriched=True,
-                        behavioral_source='vm_complete_analyzer',
-                        scan_id=scan_id,
-                    )
-                    logger.info(f"📋 Sample queued for VT verification (confidence: {final_confidence:.2%})")
-                except Exception as queue_error:
-                    logger.error(f"Failed to queue sample: {queue_error}")
+                UNCERTAINTY_THRESHOLD = 0.85
+                if final_confidence < UNCERTAINTY_THRESHOLD:
+                    try:
+                        await queue_uncertain_sample_with_file(
+                            db=db,
+                            file_bytes=file_bytes,
+                            file_name=filename,
+                            features=features_enriched,
+                            prediction_prob=final_prob,
+                            behavioral_enriched=True,
+                            behavioral_source="vm_complete_analyzer",
+                            scan_id=scan_id,
+                        )
+                        logger.info(f"📋 Sample queued for VT verification (confidence: {final_confidence:.2%})")
+                    except Exception as _qe:
+                        logger.error(f"Failed to queue sample: {_qe}")
 
-            # Save terminal log (linked to same scan_id)
-            if DB_AVAILABLE and log_capture and db:
+                if log_capture:
+                    try:
+                        log_capture.__exit__(None, None, None)
+                        output = log_capture.get_output()
+                        log_capture = None
+                        await save_terminal_log(
+                            session=db,
+                            command=f"predict_staged: {filename}",
+                            command_type="malware_scan",
+                            stdout=output["stdout"],
+                            stderr=output["stderr"],
+                            execution_time_ms=scan_time,
+                            scan_result=result_dict,
+                            file_path=filename,
+                            scan_id=scan_id,
+                        )
+                        logger.info("✓ Terminal log saved")
+                    except Exception as _dbe:
+                        logger.error(f"Failed to save terminal log: {_dbe}")
+
+            # Include scan_id so the frontend can fetch behavioral patterns
+            result_dict["scan_id"] = scan_id
+
+            yield _emit({"type": "result", "data": result_dict})
+
+        except Exception as exc:
+            logger.error(f"Staged prediction failed: {exc}", exc_info=True)
+            yield _emit({"type": "error", "msg": str(exc), "status": 500})
+
+        finally:
+            if log_capture:
                 try:
                     log_capture.__exit__(None, None, None)
-                    output = log_capture.get_output()
-                    await save_terminal_log(
-                        session=db,
-                        command=f"predict_staged: {file.filename or 'uploaded_file'}",
-                        command_type="malware_scan",
-                        stdout=output['stdout'],
-                        stderr=output['stderr'],
-                        execution_time_ms=scan_time,
-                        scan_result=result_dict,
-                        file_path=file.filename or 'uploaded_file',
-                        scan_id=scan_id,
-                    )
-                    logger.info("✓ Terminal log saved")
-                except Exception as db_error:
-                    logger.error(f"Failed to save terminal log: {db_error}")
-            
-            return PredictResponse(
-                is_malicious=bool(is_malicious),
-                confidence=float(final_confidence),
-                prediction_label="MALICIOUS" if is_malicious else "CLEAN",
-                raw_score=float(final_prob),
-                detection_method=detection_method,
-                scan_time_ms=round(scan_time, 2),
-                pe_features_extracted=True,
-                behavioral_enriched=True,
-                behavioral_source='vm_complete_analyzer'
-            )
-            
-        finally:
-            # Clean up temp file
-            try:
-                Path(tmp_path).unlink()
-            except:
-                pass
-            
-    except Exception as e:
-        logger.error(f"Staged prediction failed: {e}", exc_info=True)
-        # Stop capture on error
-        if log_capture:
-            try:
-                log_capture.__exit__(None, None, None)
-            except:
-                pass
-        raise HTTPException(status_code=500, detail=str(e))
+                except Exception:
+                    pass
+            if tmp_path:
+                try:
+                    Path(tmp_path).unlink()
+                except Exception:
+                    pass
+
+    return StreamingResponse(_stream(), media_type="text/event-stream")
 
 
 @app.get("/stats")
@@ -1342,268 +1389,6 @@ async def get_stats():
         "pe_extractor_available": pe_extractor is not None,
         "vt_enricher_available": vt_enricher is not None,
         "scaler_loaded": scaler is not None
-    }
-
-
-# ==============================================================================
-# DATABASE LOG QUERY ENDPOINTS
-# ==============================================================================
-
-@app.get("/logs/recent")
-async def get_recent_logs(
-    limit: int = 50,
-    command_type: Optional[str] = None,
-    db: Optional[AsyncSession] = Depends(get_db_session)
-):
-    """
-    Get recent terminal logs from model service
-    
-    Query params:
-    - limit: Max number of logs (default: 50)
-    - command_type: Filter by type (e.g., "malware_scan")
-    """
-    if not DB_AVAILABLE or db is None:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    from sqlalchemy import select, desc
-    from db_manager import TerminalLog
-    
-    stmt = select(TerminalLog).order_by(desc(TerminalLog.timestamp)).limit(limit)
-    
-    if command_type:
-        stmt = stmt.where(TerminalLog.command_type == command_type)
-    
-    result = await db.execute(stmt)
-    logs = result.scalars().all()
-    
-    return {
-        "total": len(logs),
-        "service": "model_service",
-        "logs": [
-            {
-                "id": log.id,
-                "timestamp": log.timestamp.isoformat(),
-                "command": log.command,
-                "type": log.command_type,
-                "execution_time_ms": log.execution_time_ms,
-                "success": log.success,
-                "scan_result": log.scan_result
-            }
-            for log in logs
-        ]
-    }
-
-
-@app.get("/logs/scans")
-async def get_scan_history(
-    limit: int = 100,
-    malicious_only: bool = False,
-    db: Optional[AsyncSession] = Depends(get_db_session)
-):
-    """
-    Get scan history with filtering
-    
-    Query params:
-    - limit: Max number of scans (default: 100)
-    - malicious_only: Only return malware detections (default: false)
-    """
-    if not DB_AVAILABLE or db is None:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    from sqlalchemy import select, desc
-    from db_manager import ScanHistory
-    
-    stmt = select(ScanHistory).order_by(desc(ScanHistory.timestamp))
-    
-    if malicious_only:
-        stmt = stmt.where(ScanHistory.is_malicious == True)
-    
-    stmt = stmt.limit(limit)
-    
-    result = await db.execute(stmt)
-    scans = result.scalars().all()
-    
-    return {
-        "total": len(scans),
-        "service": "model_service",
-        "scans": [
-            {
-                "id": scan.id,
-                "timestamp": scan.timestamp.isoformat(),
-                "file_name": scan.file_name,
-                "is_malicious": scan.is_malicious,
-                "confidence": scan.confidence,
-                "prediction_label": scan.prediction_label,
-                "model_type": scan.model_type,
-                "scan_time_ms": scan.scan_time_ms,
-                "vt_detection": scan.vt_detection_ratio
-            }
-            for scan in scans
-        ]
-    }
-
-
-@app.get("/logs/scans/{scan_id}")
-async def get_scan_detail(
-    scan_id: int,
-    include: Optional[str] = None,
-    db: Optional[AsyncSession] = Depends(get_db_session)
-):
-    """
-    Get a single scan record by ID with optional related table data.
-
-    Path params:
-    - scan_id: ID of the scan record
-
-    Query params:
-    - include: Comma-separated list of related tables to include alongside the scan.
-               Valid values: terminal_logs, behavioral_patterns, uncertain_samples, feedback_samples
-               Example: ?include=behavioral_patterns,terminal_logs
-    """
-    if not DB_AVAILABLE or db is None:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
-    from db_manager import ScanHistory
-
-    VALID_INCLUDES = {
-        "terminal_logs",
-        "behavioral_patterns",
-        "uncertain_samples",
-        "feedback_samples",
-    }
-
-    requested: set[str] = set()
-    if include:
-        requested = {s.strip().lower() for s in include.split(",")} & VALID_INCLUDES
-
-    stmt = select(ScanHistory).where(ScanHistory.id == scan_id)
-
-    # Only join the relationships the caller actually asked for
-    rel_map = {
-        "terminal_logs":      ScanHistory.terminal_logs,
-        "behavioral_patterns": ScanHistory.behavioral_patterns,
-        "uncertain_samples":  ScanHistory.uncertain_samples,
-        "feedback_samples":   ScanHistory.feedback_samples,
-    }
-    for key in requested:
-        stmt = stmt.options(selectinload(rel_map[key]))
-
-    result = await db.execute(stmt)
-    scan = result.scalar_one_or_none()
-
-    if scan is None:
-        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-
-    response: dict = {
-        "id": scan.id,
-        "timestamp": scan.timestamp.isoformat(),
-        "file_name": scan.file_name,
-        "file_hash": scan.file_hash,
-        "is_malicious": scan.is_malicious,
-        "confidence": scan.confidence,
-        "prediction_label": scan.prediction_label,
-        "model_type": scan.model_type,
-        "scan_time_ms": scan.scan_time_ms,
-        "vt_detection": scan.vt_detection_ratio,
-        "included_tables": sorted(requested),
-    }
-
-    if "terminal_logs" in requested:
-        response["terminal_logs"] = [
-            {
-                "id": log.id,
-                "timestamp": log.timestamp.isoformat(),
-                "command": log.command,
-                "command_type": log.command_type,
-                "execution_time_ms": log.execution_time_ms,
-                "success": log.success,
-                "stdout": log.stdout,
-                "stderr": log.stderr,
-                "scan_result": log.scan_result,
-            }
-            for log in scan.terminal_logs
-        ]
-
-    if "behavioral_patterns" in requested:
-        response["behavioral_patterns"] = [
-            {
-                "id": bp.id,
-                "timestamp": bp.timestamp.isoformat(),
-                "detection_method": bp.detection_method,
-                "total_patterns_detected": bp.total_patterns_detected,
-                "risk_score": bp.risk_score,
-                "mass_file_encryption": bp.mass_file_encryption,
-                "shadow_copy_deletion": bp.shadow_copy_deletion,
-                "registry_persistence": bp.registry_persistence,
-                "network_c2_communication": bp.network_c2_communication,
-                "ransom_note_creation": bp.ransom_note_creation,
-                "mass_file_deletion": bp.mass_file_deletion,
-                "suspicious_process_creation": bp.suspicious_process_creation,
-                "api_encrypt_rename_sequence": bp.api_encrypt_rename_sequence,
-                "raw_patterns": bp.raw_patterns,
-            }
-            for bp in scan.behavioral_patterns
-        ]
-
-    if "uncertain_samples" in requested:
-        response["uncertain_samples"] = [
-            {
-                "id": s.id,
-                "created_at": s.created_at.isoformat(),
-                "file_hash": s.file_hash,
-                "file_name": s.file_name,
-                "ml_prediction": s.ml_prediction,
-                "ml_confidence": s.ml_confidence,
-                "ml_raw_score": s.ml_raw_score,
-                "prediction_label": s.prediction_label,
-                "behavioral_enriched": s.behavioral_enriched,
-                "behavioral_source": s.behavioral_source,
-                "status": s.status,
-                "vt_queried": s.vt_queried,
-                "vt_attempts": s.vt_attempts,
-            }
-            for s in scan.uncertain_samples
-        ]
-
-    if "feedback_samples" in requested:
-        response["feedback_samples"] = [
-            {
-                "id": s.id,
-                "timestamp": s.timestamp.isoformat(),
-                "file_hash": s.file_hash,
-                "file_name": s.file_name,
-                "ml_verdict": s.ml_verdict,
-                "ml_confidence": s.ml_confidence,
-                "vt_detection_ratio": s.vt_detection_ratio,
-                "vt_family": s.vt_family,
-                "vt_threat_label": s.vt_threat_label,
-                "mismatch_type": s.mismatch_type,
-                "severity": s.severity,
-                "needs_review": s.needs_review,
-                "processed": s.processed,
-            }
-            for s in scan.feedback_samples
-        ]
-
-    return response
-
-
-@app.get("/logs/stats")
-async def get_log_statistics(db: Optional[AsyncSession] = Depends(get_db_session)):
-    """Get aggregate statistics from scan history"""
-    if not DB_AVAILABLE or db is None:
-        raise HTTPException(status_code=503, detail="Database not available")
-    
-    from db_manager import get_scan_stats
-    
-    stats = await get_scan_stats(db)
-    
-    return {
-        "status": "success",
-        "service": "model_service",
-        "statistics": stats
     }
 
 

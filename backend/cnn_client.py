@@ -4,6 +4,7 @@ Use this in Python 3.14 project to call the CNN model service running in Python 
 """
 
 import requests
+import json
 import logging
 from pathlib import Path
 from typing import Dict, Any
@@ -142,40 +143,58 @@ class CNNModelClient:
     
     def scan_file_staged(self, file_path: str) -> Dict[str, Any]:
         """
-        Scan with staged analysis: PE static → VT enrichment if uncertain
-        
-        This provides the best accuracy by:
-        1. Fast PE static analysis first
-        2. VT API enrichment only when confidence is uncertain (0.3-0.7)
-        3. Conservation of VT API quota
-        
+        Scan with staged analysis (sandbox + soft-voting ensemble).
+
+        model_service /predict/staged now returns a text/event-stream SSE
+        response, so we consume it line-by-line and extract the final
+        ``result`` event rather than calling .json() on the whole body.
+
         Args:
             file_path: Path to file to scan
-            
+
         Returns:
-            Scan results dictionary with VT enrichment data if applicable
+            Scan results dictionary with full staged analysis data
         """
         start_time = time.time()
-        
+
         try:
-            # Read file
             file_path_obj = Path(file_path)
             if not file_path_obj.exists():
                 raise FileNotFoundError(f"File not found: {file_path}")
-            
-            # Send file to staged endpoint
+
+            result = None
             with open(file_path_obj, 'rb') as f:
                 files = {'file': (file_path_obj.name, f, 'application/octet-stream')}
-                response = requests.post(
+                # stream=True so we can iterate lines without buffering the full body
+                with requests.post(
                     f"{self.service_url}/predict/staged",
                     files=files,
-                    timeout=self.timeout
-                )
-            
-            if response.status_code != 200:
-                raise RuntimeError(f"Model service error: {response.status_code} - {response.text}")
-            
-            result = response.json()
+                    params={"run_sandbox": "true"},
+                    timeout=self.timeout,
+                    stream=True,
+                ) as response:
+                    if response.status_code != 200:
+                        raise RuntimeError(
+                            f"Model service error: {response.status_code} - {response.text}"
+                        )
+                    for raw_line in response.iter_lines():
+                        if not raw_line:
+                            continue
+                        line = raw_line.decode("utf-8") if isinstance(raw_line, bytes) else raw_line
+                        if not line.startswith("data:"):
+                            continue
+                        try:
+                            msg = json.loads(line[5:].strip())
+                        except Exception:
+                            continue
+                        if msg.get("type") == "result":
+                            result = msg.get("data", {})
+                            break
+                        if msg.get("type") == "error":
+                            raise RuntimeError(f"Model service error: {msg.get('msg')}")
+
+            if result is None:
+                raise RuntimeError("Model service closed stream without a result event")
             
             # Update statistics
             self.scans_performed += 1

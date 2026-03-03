@@ -12,7 +12,8 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 import os
 import logging
-import uuid 
+import uuid
+import json
 
 # Load environment variables from .env file in same directory as this file
 try:
@@ -506,22 +507,30 @@ async def save_behavioral_patterns(
     Returns:
         Persisted BehavioralPatterns ORM row
     """
-    total = sum(1 for v in patterns.values() if v)
+    # Support both new rich-dict format {'detected': bool, 'confidence': ..., 'evidence': [...]} 
+    # and legacy plain-bool format for backward compatibility.
+    def _pb(key): 
+        v = patterns.get(key, False)
+        return bool(v.get('detected', False)) if isinstance(v, dict) else bool(v)
+
+    total = sum(1 for k in patterns if _pb(k))
     row = BehavioralPatterns(
         file_name=file_name,
         file_hash=file_hash,
         detection_method=detection_method,
-        mass_file_encryption=patterns.get('mass_file_encryption', False),
-        shadow_copy_deletion=patterns.get('shadow_copy_deletion', False),
-        registry_persistence=patterns.get('registry_persistence', False),
-        network_c2_communication=patterns.get('network_c2_communication', False),
-        ransom_note_creation=patterns.get('ransom_note_creation', False),
-        mass_file_deletion=patterns.get('mass_file_deletion', False),
-        suspicious_process_creation=patterns.get('suspicious_process_creation', False),
-        api_encrypt_rename_sequence=patterns.get('api_encrypt_rename_sequence', False),
+        mass_file_encryption=_pb('mass_file_encryption'),
+        shadow_copy_deletion=_pb('shadow_copy_deletion'),
+        registry_persistence=_pb('registry_persistence'),
+        network_c2_communication=_pb('network_c2_communication'),
+        ransom_note_creation=_pb('ransom_note_creation'),
+        mass_file_deletion=_pb('mass_file_deletion'),
+        suspicious_process_creation=_pb('suspicious_process_creation'),
+        api_encrypt_rename_sequence=_pb('api_encrypt_rename_sequence'),
         total_patterns_detected=total,
         risk_score=risk_score,
-        raw_patterns=patterns,
+        # Round-trip through json to produce a plain Python dict — asyncpg's JSON codec
+        # cannot handle nested dicts that haven't been through stdlib json serialization.
+        raw_patterns=json.loads(json.dumps(patterns, default=str)),
         scan_id=scan_id,
     )
     session.add(row)
