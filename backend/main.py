@@ -5,13 +5,18 @@ FastAPI server for local malware scanning with ML model
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import uvicorn
 import logging
+import asyncio
+import uuid
+import json
 from pathlib import Path
 from typing import Optional, Dict, Any
 import os
 import sys
+import httpx
 
 # Load environment variables from .env file (optional)
 try:
@@ -44,11 +49,6 @@ except ImportError as e:
     logger.debug(f"Could not import from migration_package.cnn_client: {e}")
 
 from vt_integration import VirusTotalEnricher
-
-# Import database functions
-from db_manager import get_session, save_scan_history, get_scan_history, User
-from sqlalchemy.ext.asyncio import AsyncSession
-
 
 # Import authentication router
 try:
@@ -144,6 +144,31 @@ detector: Optional[MalwareDetector] = None
 cnn_detector: Optional[CNNModelClient] = None  # Now using HTTP client
 vt_enricher: Optional[VirusTotalEnricher] = None
 
+# In-memory job store: job_id → asyncio.Queue
+# Each queue carries {type, msg/data} dicts consumed by the SSE stream endpoint
+scan_jobs: dict[str, asyncio.Queue] = {}
+
+# DB availability — mirrors db_manager import success
+DB_AVAILABLE = False
+try:
+    from db_manager import get_session, save_scan_history, get_scan_history, User
+    from sqlalchemy.ext.asyncio import AsyncSession
+    DB_AVAILABLE = True
+    logger.info("✓ DB modules available in main.py")
+except ImportError as e:
+    logger.warning(f"DB modules not available in main.py: {e}")
+    AsyncSession = None
+# Database dependency helper
+async def get_db_session() -> Optional[AsyncSession]:
+    """
+    Optional database session dependency
+    Returns session if DB_AVAILABLE, None otherwise
+    """
+    if DB_AVAILABLE:
+        async for session in get_session():
+            yield session
+    else:
+        yield None
 
 class ScanRequest(BaseModel):
     """Request model for file scanning"""
@@ -523,6 +548,377 @@ async def scan_uploaded_file(
         if temp_path and temp_path.exists():
             temp_path.unlink()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/predict/staged")
+async def proxy_predict_staged(
+    file: UploadFile = File(...),
+    run_sandbox: bool = True,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_session)
+):
+    """
+    Gateway proxy for /predict/staged on model_service (port 8001).
+    Authenticates the user, spawns a background task, and returns a job_id
+    immediately. The client should connect to GET /scan/{job_id}/stream for
+    live progress and the final result via SSE.
+    """
+    job_id = str(uuid.uuid4())
+    queue: asyncio.Queue = asyncio.Queue()
+    scan_jobs[job_id] = queue
+
+    file_bytes = await file.read()
+    filename = file.filename or "uploaded_file"
+    user_id = str(current_user.user_id)
+
+    async def run_scan():
+        try:
+            await queue.put({"type": "log", "msg": f"🔍 Submitting '{filename}' to model service..."})
+
+            async with httpx.AsyncClient(timeout=660.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{CNN_MODEL_SERVICE_URL}/predict/staged",
+                    params={"run_sandbox": str(run_sandbox).lower(), "user_id": user_id},
+                    files={"file": (filename, file_bytes, "application/octet-stream")},
+                ) as response:
+                    if response.status_code != 200:
+                        body = await response.aread()
+                        await queue.put({"type": "error", "msg": body.decode(), "status": response.status_code})
+                        return
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        raw = line[5:].strip()
+                        if not raw:
+                            continue
+                        try:
+                            msg = json.loads(raw)
+                        except Exception:
+                            continue
+                        await queue.put(msg)
+                        if msg.get("type") in ("result", "error"):
+                            break
+
+        except Exception as e:
+            await queue.put({"type": "error", "msg": str(e), "status": 500})
+        finally:
+            # Keep queue alive briefly so the SSE consumer can drain the last message
+            await asyncio.sleep(30)
+            scan_jobs.pop(job_id, None)
+
+    asyncio.create_task(run_scan())
+    return {"job_id": job_id}
+
+
+@app.get("/scan/{job_id}/stream")
+async def stream_scan_result(
+    job_id: str,
+    token: Optional[str] = None,  # JWT passed as query param — EventSource can't set headers
+):
+    """
+    SSE stream for a running scan job. Connect after POST /predict/staged returns a job_id.
+
+    Usage (JavaScript):
+        const es = new EventSource(`/scan/${jobId}/stream?token=${localStorage.getItem('access_token')}`);
+        es.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'log')    appendLog(msg.msg);
+            if (msg.type === 'result') { showResult(msg.data); es.close(); }
+            if (msg.type === 'error')  { showError(msg.msg);   es.close(); }
+        };
+
+    Event types:
+        {"type": "log",    "msg": "..."}             — progress line
+        {"type": "result", "data": {...}}             — final prediction JSON
+        {"type": "error",  "msg": "...", "status": N} — on failure
+    """
+    # Validate JWT supplied as query param (EventSource cannot send Authorization header)
+    from auth.utils import decode_access_token
+    payload = decode_access_token(token or "")
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or missing token")
+
+    queue = scan_jobs.get(job_id)
+    if queue is None:
+        raise HTTPException(status_code=404, detail="Job not found or already expired")
+
+    async def event_generator():
+        while True:
+            try:
+                msg = await asyncio.wait_for(queue.get(), timeout=60.0)
+                yield f"data: {json.dumps(msg)}\n\n"
+                if msg["type"] in ("result", "error"):
+                    break
+            except asyncio.TimeoutError:
+                # SSE comment — keeps the connection alive without triggering onmessage
+                yield ": heartbeat\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+# ==============================================================================
+# DATABASE LOG QUERY ENDPOINTS
+# ==============================================================================
+
+@app.get("/logs/recent")
+async def get_recent_logs(
+    limit: int = 50,
+    command_type: Optional[str] = None,
+    db: Optional[AsyncSession] = Depends(get_db_session)
+):
+    """
+    Get recent terminal logs from model service
+    
+    Query params:
+    - limit: Max number of logs (default: 50)
+    - command_type: Filter by type (e.g., "malware_scan")
+    """
+    if not DB_AVAILABLE or db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    from sqlalchemy import select, desc
+    from db_manager import TerminalLog
+    
+    stmt = select(TerminalLog).order_by(desc(TerminalLog.timestamp)).limit(limit)
+    
+    if command_type:
+        stmt = stmt.where(TerminalLog.command_type == command_type)
+    
+    result = await db.execute(stmt)
+    logs = result.scalars().all()
+    
+    return {
+        "total": len(logs),
+        "service": "model_service",
+        "logs": [
+            {
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "command": log.command,
+                "type": log.command_type,
+                "execution_time_ms": log.execution_time_ms,
+                "success": log.success,
+                "scan_result": log.scan_result
+            }
+            for log in logs
+        ]
+    }
+
+
+@app.get("/logs/scans")
+async def get_scan_history(
+    limit: int = 100,
+    malicious_only: bool = False,
+    db: Optional[AsyncSession] = Depends(get_db_session)
+):
+    """
+    Get scan history with filtering
+    
+    Query params:
+    - limit: Max number of scans (default: 100)
+    - malicious_only: Only return malware detections (default: false)
+    """
+    if not DB_AVAILABLE or db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    from sqlalchemy import select, desc
+    from db_manager import ScanHistory
+    
+    stmt = select(ScanHistory).order_by(desc(ScanHistory.timestamp))
+    
+    if malicious_only:
+        stmt = stmt.where(ScanHistory.is_malicious == True)
+    
+    stmt = stmt.limit(limit)
+    
+    result = await db.execute(stmt)
+    scans = result.scalars().all()
+    
+    return {
+        "total": len(scans),
+        "service": "model_service",
+        "scans": [
+            {
+                "id": scan.id,
+                "timestamp": scan.timestamp.isoformat(),
+                "file_name": scan.file_name,
+                "is_malicious": scan.is_malicious,
+                "confidence": scan.confidence,
+                "prediction_label": scan.prediction_label,
+                "model_type": scan.model_type,
+                "scan_time_ms": scan.scan_time_ms,
+                "vt_detection": scan.vt_detection_ratio
+            }
+            for scan in scans
+        ]
+    }
+
+
+@app.get("/logs/scans/{scan_id}")
+async def get_scan_detail(
+    scan_id: int,
+    include: Optional[str] = None,
+    db: Optional[AsyncSession] = Depends(get_db_session)
+):
+    """
+    Get a single scan record by ID with optional related table data.
+
+    Path params:
+    - scan_id: ID of the scan record
+
+    Query params:
+    - include: Comma-separated list of related tables to include alongside the scan.
+               Valid values: terminal_logs, behavioral_patterns, uncertain_samples, feedback_samples
+               Example: ?include=behavioral_patterns,terminal_logs
+    """
+    if not DB_AVAILABLE or db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from db_manager import ScanHistory
+
+    VALID_INCLUDES = {
+        "terminal_logs",
+        "behavioral_patterns",
+        "uncertain_samples",
+        "feedback_samples",
+    }
+
+    requested: set[str] = set()
+    if include:
+        requested = {s.strip().lower() for s in include.split(",")} & VALID_INCLUDES
+
+    stmt = select(ScanHistory).where(ScanHistory.id == scan_id)
+
+    # Only join the relationships the caller actually asked for
+    rel_map = {
+        "terminal_logs":      ScanHistory.terminal_logs,
+        "behavioral_patterns": ScanHistory.behavioral_patterns,
+        "uncertain_samples":  ScanHistory.uncertain_samples,
+        "feedback_samples":   ScanHistory.feedback_samples,
+    }
+    for key in requested:
+        stmt = stmt.options(selectinload(rel_map[key]))
+
+    result = await db.execute(stmt)
+    scan = result.scalar_one_or_none()
+
+    if scan is None:
+        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
+
+    response: dict = {
+        "id": scan.id,
+        "timestamp": scan.timestamp.isoformat(),
+        "file_name": scan.file_name,
+        "file_hash": scan.file_hash,
+        "is_malicious": scan.is_malicious,
+        "confidence": scan.confidence,
+        "prediction_label": scan.prediction_label,
+        "model_type": scan.model_type,
+        "scan_time_ms": scan.scan_time_ms,
+        "vt_detection": scan.vt_detection_ratio,
+        "included_tables": sorted(requested),
+    }
+
+    if "terminal_logs" in requested:
+        response["terminal_logs"] = [
+            {
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "command": log.command,
+                "command_type": log.command_type,
+                "execution_time_ms": log.execution_time_ms,
+                "success": log.success,
+                "stdout": log.stdout,
+                "stderr": log.stderr,
+                "scan_result": log.scan_result,
+            }
+            for log in scan.terminal_logs
+        ]
+
+    if "behavioral_patterns" in requested:
+        response["behavioral_patterns"] = [
+            {
+                "id": bp.id,
+                "timestamp": bp.timestamp.isoformat(),
+                "detection_method": bp.detection_method,
+                "total_patterns_detected": bp.total_patterns_detected,
+                "risk_score": bp.risk_score,
+                "mass_file_encryption": bp.mass_file_encryption,
+                "shadow_copy_deletion": bp.shadow_copy_deletion,
+                "registry_persistence": bp.registry_persistence,
+                "network_c2_communication": bp.network_c2_communication,
+                "ransom_note_creation": bp.ransom_note_creation,
+                "mass_file_deletion": bp.mass_file_deletion,
+                "suspicious_process_creation": bp.suspicious_process_creation,
+                "api_encrypt_rename_sequence": bp.api_encrypt_rename_sequence,
+                "raw_patterns": bp.raw_patterns,
+            }
+            for bp in scan.behavioral_patterns
+        ]
+
+    if "uncertain_samples" in requested:
+        response["uncertain_samples"] = [
+            {
+                "id": s.id,
+                "created_at": s.created_at.isoformat(),
+                "file_hash": s.file_hash,
+                "file_name": s.file_name,
+                "ml_prediction": s.ml_prediction,
+                "ml_confidence": s.ml_confidence,
+                "ml_raw_score": s.ml_raw_score,
+                "prediction_label": s.prediction_label,
+                "behavioral_enriched": s.behavioral_enriched,
+                "behavioral_source": s.behavioral_source,
+                "status": s.status,
+                "vt_queried": s.vt_queried,
+                "vt_attempts": s.vt_attempts,
+            }
+            for s in scan.uncertain_samples
+        ]
+
+    if "feedback_samples" in requested:
+        response["feedback_samples"] = [
+            {
+                "id": s.id,
+                "timestamp": s.timestamp.isoformat(),
+                "file_hash": s.file_hash,
+                "file_name": s.file_name,
+                "ml_verdict": s.ml_verdict,
+                "ml_confidence": s.ml_confidence,
+                "vt_detection_ratio": s.vt_detection_ratio,
+                "vt_family": s.vt_family,
+                "vt_threat_label": s.vt_threat_label,
+                "mismatch_type": s.mismatch_type,
+                "severity": s.severity,
+                "needs_review": s.needs_review,
+                "processed": s.processed,
+            }
+            for s in scan.feedback_samples
+        ]
+
+    return response
+
+
+@app.get("/logs/stats")
+async def get_log_statistics(db: Optional[AsyncSession] = Depends(get_db_session)):
+    """Get aggregate statistics from scan history"""
+    if not DB_AVAILABLE or db is None:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
+    from db_manager import get_scan_stats
+    
+    stats = await get_scan_stats(db)
+    
+    return {
+        "status": "success",
+        "service": "model_service",
+        "statistics": stats
+    }
+
+
 
 
 @app.get("/stats")

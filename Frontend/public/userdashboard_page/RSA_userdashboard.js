@@ -88,114 +88,6 @@ const api = {
     }
 };
 
-// --- Gauge Drawing (modernised) ---
-function drawGauge(canvas, value) {
-    const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-
-    // High-DPI canvas
-    const cssW = canvas.clientWidth || canvas.width;
-    const cssH = canvas.clientHeight || canvas.height;
-    canvas.width = cssW * dpr;
-    canvas.height = cssH * dpr;
-    canvas.style.width = cssW + 'px';
-    canvas.style.height = cssH + 'px';
-    ctx.scale(dpr, dpr);
-
-    ctx.clearRect(0, 0, cssW, cssH);
-
-    const start = Math.PI;
-    const end = 2 * Math.PI;
-    const centerX = cssW / 2;
-    const padTop = 20;
-    const padBottom = 14;
-    const padSide = 24;
-    const centerY = cssH - padBottom;
-    const maxValue = 100;
-    const clampedValue = Math.max(0, Math.min(maxValue, value));
-    const maxRadiusByWidth = Math.max(20, (cssW - padSide * 2) / 2);
-    let radius = Math.min(maxRadiusByWidth, Math.max(20, cssH - padTop - padBottom - 24));
-    let lineWidth = Math.max(14, Math.round(radius * 0.16));
-    const labelOffset = Math.max(10, Math.round(lineWidth * 0.65));
-    radius = Math.min(radius, Math.max(20, cssH - padTop - padBottom - labelOffset - lineWidth / 2));
-    lineWidth = Math.max(14, Math.round(radius * 0.16));
-
-    // Background arc (track)
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, start, end, false);
-    ctx.lineWidth = lineWidth;
-    ctx.strokeStyle = '#E8EAF0';
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    // Coloured arc (progress)
-    const valueAngle = start + (clampedValue / maxValue) * (end - start);
-    const grad = ctx.createLinearGradient(centerX - radius, centerY, centerX + radius, centerY);
-    grad.addColorStop(0, '#16A34A');
-    grad.addColorStop(0.45, '#FACC15');
-    grad.addColorStop(0.7, '#F97316');
-    grad.addColorStop(1, '#DC2626');
-
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, start, valueAngle, false);
-    ctx.lineWidth = lineWidth;
-    ctx.strokeStyle = grad;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    // Tick labels (0..100)
-    ctx.fillStyle = '#8B92A8';
-    ctx.font = `500 11px Inter, Segoe UI, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    for (let i = 0; i <= 10; i++) {
-        const labelValue = i * 10;
-        const angle = start + (labelValue / maxValue) * (end - start);
-        const labelR = radius + lineWidth / 2 + labelOffset;
-        const x = centerX + Math.cos(angle) * labelR;
-        const y = centerY + Math.sin(angle) * labelR;
-        ctx.fillText(String(labelValue), x, y);
-    }
-
-    // Centre value text
-    ctx.fillStyle = '#111A3A';
-    ctx.font = `800 ${Math.round(radius * 0.42)}px Inter, Segoe UI, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(String(Math.round(clampedValue)), centerX, centerY - 8);
-
-    // Needle
-    const needleAngle = start + (clampedValue / maxValue) * (end - start);
-    const needleLength = radius - lineWidth / 2 - 6;
-    ctx.beginPath();
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(
-        centerX + Math.cos(needleAngle) * needleLength,
-        centerY + Math.sin(needleAngle) * needleLength
-    );
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#111A3A';
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    // Centre dot
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 6, 0, 2 * Math.PI);
-    ctx.fillStyle = '#111A3A';
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 3, 0, 2 * Math.PI);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-}
-
-function getStatusForValue(value) {
-    const clampedValue = Math.max(0, Math.min(100, value));
-    if (clampedValue <= 33.33) return { label: 'NORMAL', cssClass: 'status-normal' };
-    if (clampedValue <= 66.66) return { label: 'ELEVATED', cssClass: 'status-elevated' };
-    return { label: 'CRITICAL', cssClass: 'status-critical' };
-}
-
 // --- Animated counter ---
 function animateCount(element, target, duration = 800) {
     const startTime = performance.now();
@@ -214,22 +106,6 @@ function animateCount(element, target, duration = 800) {
     requestAnimationFrame(step);
 }
 
-// --- Animated gauge ---
-function animateGauge(canvas, target, duration = 1000) {
-    const startTime = performance.now();
-
-    function step(now) {
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-        const ease = 1 - Math.pow(1 - progress, 3);
-        const current = ease * target;
-        drawGauge(canvas, current);
-        if (progress < 1) requestAnimationFrame(step);
-    }
-
-    requestAnimationFrame(step);
-}
-
 // ============================================================
 // Chart helpers
 // ============================================================
@@ -237,7 +113,6 @@ function animateGauge(canvas, target, duration = 1000) {
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // --- Chart data (populated from API) ---
-let currentGaugeValue = 0; // shared with resize handler
 let allDetections = [];    // cached for period switching
 let currentBarPeriod  = 'year';
 let currentLinePeriod = 'year';
@@ -634,38 +509,10 @@ async function populateDashboard() {
     updateDateTime();
     setInterval(updateDateTime, 30000);
 
-    // Hero Panel — derive score from real data
-    const systemStatus = await api.getSystemStatus();
+    // Stats for charts + detection count
     const stats = await api.getScanStats();
-    // Compute risk score: detection_rate from backend (0-100), default 0
-    const a = stats ? Math.round(stats.detection_rate ?? 0) : 0;
-    const statusInfo = getStatusForValue(a);
-    const statusEl = document.getElementById('system-status');
-    statusEl.className = 'status-pill ' + statusInfo.cssClass;
-    statusEl.querySelector('.status-text').textContent = `System Status: ${statusInfo.label}`;
 
-    // Hero title + icon
-    const heroWrap  = document.getElementById('hero-icon-wrap');
-    const heroTitle = document.getElementById('hero-title');
-    const heroSub   = document.getElementById('hero-sub');
-    if (statusInfo.label === 'NORMAL') {
-        heroWrap.className  = 'hero-icon-wrap hero-normal';
-        heroTitle.textContent = 'System is Secure';
-        heroSub.textContent   = 'No active threats detected. All systems operating normally.';
-    } else if (statusInfo.label === 'ELEVATED') {
-        heroWrap.className  = 'hero-icon-wrap hero-elevated';
-        heroTitle.textContent = 'Elevated Risk Detected';
-        heroSub.textContent   = 'Suspicious activity found. Review detections and take action.';
-    } else {
-        heroWrap.className  = 'hero-icon-wrap hero-critical';
-        heroTitle.textContent = 'Critical Risk Detected';
-        heroSub.textContent   = 'High-severity threats are active. Immediate action is recommended.';
-    }
-
-    animateGauge(document.getElementById('gauge'), a);
-    currentGaugeValue = a; // keep in sync for resize
-
-    // Panel 2 — reuse already-fetched stats
+    // Panel: All Detections count
     const countSpan = document.getElementById('detections-count-val');
     animateCount(countSpan, stats ? (stats.total_scans ?? 0) : 0);
 
@@ -676,8 +523,8 @@ async function populateDashboard() {
     document.getElementById('latest-time').textContent   = latest.time;
 
     applySeverityBadge(document.getElementById('latest-severity'), latest.severity);
-    // Animate ring chart — use confidence from latest detection (or gauge score as fallback)
-    const ringPct = latest.confidence ? Math.round(latest.confidence * 100) : a;
+    // Animate ring chart — use confidence from latest detection, fallback 0
+    const ringPct = latest.confidence ? Math.round(latest.confidence * 100) : 0;
     animateRing(ringPct, latest.severity);
 
     // Panel 4
@@ -714,6 +561,416 @@ async function populateDashboard() {
     animateBarChart();
 }
 
+// ============================================================
+// SCAN PIPELINE — File Upload & Analysis
+// ============================================================
+
+let scanEs              = null;   // active EventSource
+let scanFile            = null;   // currently selected file
+let scanResult          = null;   // last result object
+let scanLogs            = [];     // analysis log entries
+let quarantinedFiles    = [];     // quarantine list
+let scanLogsVisible     = true;   // show/hide logs toggle
+let scanFileInfo        = null;   // { name, size, type, hash }
+let scanBehavioralPatterns = [];
+
+function scanFormatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function scanGetFileType(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const types = {
+        exe: 'Executable', dll: 'Dynamic Library', pdf: 'PDF Document',
+        doc: 'Word Document', docx: 'Word Document', zip: 'Archive',
+        rar: 'Archive', js: 'JavaScript', py: 'Python Script',
+        bat: 'Batch File', ps1: 'PowerShell Script', msi: 'Installer',
+    };
+    return types[ext] || 'File';
+}
+
+async function scanComputeHash(fileObj) {
+    const buffer = await fileObj.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function scanSetProgress(pct) {
+    const bar   = document.getElementById('scan-progress-bar');
+    const pctEl = document.getElementById('scan-progress-pct');
+    const lbl   = document.getElementById('scan-progress-label');
+    if (bar) {
+        bar.style.width = pct + '%';
+        bar.className = 'scan-progress-bar' +
+            (pct === 100 ? (scanResult && scanResult.is_malicious ? ' bar-danger' : ' bar-safe') : '');
+    }
+    if (pctEl) pctEl.textContent = pct + ' %';
+    if (lbl) {
+        if (pct === 0)        lbl.textContent = 'Ready';
+        else if (pct === 100) lbl.textContent = 'Scan complete';
+        else                  lbl.textContent = 'Scanning file...';
+    }
+}
+
+function scanAddLog(text, status) {
+    if (!status) status = 'success';
+    scanLogs.push({ text, status });
+    const icon = status === 'success' ? '✅' : status === 'warning' ? '⚠️' : '❌';
+    const list = document.getElementById('scan-logs-list');
+    if (list) {
+        const div = document.createElement('div');
+        div.className = 'scan-log-entry scan-log-' + status;
+        div.innerHTML = '<span class="scan-log-icon">' + icon + '</span><span>' + text + '</span>';
+        list.appendChild(div);
+        list.scrollTop = list.scrollHeight;
+    }
+    const section = document.getElementById('scan-logs-section');
+    if (section) section.style.display = '';
+}
+
+function scanRenderQuarantine() {
+    const iconEl    = document.getElementById('quarantine-icon');
+    const contentEl = document.getElementById('quarantine-content');
+    if (!contentEl) return;
+    if (iconEl) {
+        iconEl.className = 'quarantine-icon ' + (quarantinedFiles.length === 0 ? 'quarantine-clean' : 'quarantine-alert');
+        iconEl.textContent = quarantinedFiles.length === 0 ? '✅' : '⚠️';
+    }
+    if (quarantinedFiles.length === 0) {
+        contentEl.innerHTML = '<p class="quarantine-empty">No quarantined files</p>';
+    } else {
+        contentEl.innerHTML = '<ul class="quarantine-list">' +
+            quarantinedFiles.map((qf, i) =>
+                '<li class="quarantine-item">' +
+                    '<div>' +
+                        '<span class="quarantine-file-name">' + qf.name + '</span>' +
+                        '<span class="quarantine-meta">' + qf.confidence + ' \u00b7 ' + qf.date + '</span>' +
+                    '</div>' +
+                    '<button class="quarantine-remove" data-idx="' + i + '" title="Remove from quarantine">\u2715</button>' +
+                '</li>'
+            ).join('') +
+        '</ul>';
+        contentEl.querySelectorAll('.quarantine-remove').forEach(btn => {
+            btn.addEventListener('click', () => {
+                quarantinedFiles.splice(parseInt(btn.dataset.idx, 10), 1);
+                scanRenderQuarantine();
+            });
+        });
+    }
+}
+
+function scanShowResults() {
+    const placeholder = document.getElementById('scan-placeholder');
+    const results     = document.getElementById('scan-results-area');
+    if (placeholder) placeholder.style.display = 'none';
+    if (results)     results.style.display = '';
+}
+
+function scanRenderConfidence() {
+    const bar   = document.getElementById('scan-confidence-bar');
+    const lbl   = document.getElementById('scan-confidence-label');
+    const badge = document.getElementById('scan-confidence-badge');
+    if (!scanResult || !bar) return;
+    bar.style.display = '';
+    bar.className = 'scan-confidence-bar ' + (scanResult.is_malicious ? 'confidence-danger' : 'confidence-safe');
+    if (lbl)   lbl.textContent = 'Model Confidence: ' + scanResult.confidence + '%';
+    if (badge) {
+        badge.textContent = scanResult.prediction;
+        badge.className   = 'confidence-badge ' + (scanResult.is_malicious ? 'badge-malware' : 'badge-benign');
+    }
+}
+
+function scanRenderModal() {
+    const body       = document.getElementById('logs-modal-body');
+    const title      = document.getElementById('logs-modal-title');
+    const banner     = document.getElementById('logs-modal-banner');
+    const footer     = document.getElementById('logs-modal-footer');
+    const confEl     = document.getElementById('logs-modal-confidence');
+    if (!body) return;
+
+    if (title && scanFileInfo) title.textContent = 'AI Analysis Logs: ' + scanFileInfo.name;
+
+    if (banner) {
+        if (scanResult) {
+            banner.style.display = '';
+            banner.className = 'logs-modal-banner ' + (scanResult.is_malicious ? 'banner-danger' : 'banner-safe');
+            banner.textContent = 'Scan Completed\u00a0|\u00a0Model Confidence: ' + scanResult.confidence + '%';
+        } else {
+            banner.style.display = 'none';
+        }
+    }
+
+    body.innerHTML = scanLogs.map(log => {
+        const icon  = log.status === 'success' ? '✅' : log.status === 'warning' ? '⚠️' : '❌';
+        const extra = (log.status === 'success' && log.text.indexOf('hash') !== -1 && scanFileInfo)
+            ? ' (' + scanFileInfo.hash + ')' : '';
+        return '<div class="logs-modal-entry logs-modal-' + log.status + '">' +
+            '<span class="logs-modal-icon">' + icon + '</span>' +
+            '<span>' + log.text + extra + '</span>' +
+            '</div>';
+    }).join('');
+
+    if (scanResult && scanResult.is_malicious && scanBehavioralPatterns.length > 0) {
+        let pHtml = '<div class="logs-modal-warning-detail">' +
+            '<div class="logs-modal-entry logs-modal-warning">' +
+                '<span class="logs-modal-icon">⚠️</span>' +
+                '<span>Detected behavioral patterns (' + scanBehavioralPatterns.length + '):</span>' +
+            '</div>';
+        scanBehavioralPatterns.forEach(p => {
+            pHtml +=
+                '<div class="logs-modal-pattern-item">' +
+                    '<div class="logs-modal-pattern-title">' +
+                        '<code>' + p.label + '</code>' +
+                        (p.confidence ? '<span class="pattern-confidence">' + p.confidence + '</span>' : '') +
+                    '</div>' +
+                    '<p class="logs-modal-pattern-desc">' + p.description + '</p>' +
+                    (p.evidence.length > 0
+                        ? '<ul class="logs-modal-pattern-list">' +
+                          p.evidence.map(ev => '<li><code>' + ev + '</code></li>').join('') +
+                          '</ul>'
+                        : '') +
+                '</div>';
+        });
+        pHtml += '</div>';
+        body.innerHTML += pHtml;
+    }
+
+    if (scanResult) {
+        body.innerHTML +=
+            '<div class="logs-modal-classification ' +
+            (scanResult.is_malicious ? 'classification-malicious' : 'classification-benign') + '">' +
+            '[!] Final classification: <strong>' + scanResult.prediction + '</strong>' +
+            (scanResult.is_malicious ? ' (Severity: <strong>CRITICAL</strong>)' : '') +
+            '</div>';
+    }
+
+    if (footer) {
+        if (scanResult) {
+            footer.style.display = '';
+            if (confEl) confEl.textContent = 'Model Confidence: ' + scanResult.confidence + '%';
+        } else {
+            footer.style.display = 'none';
+        }
+    }
+}
+
+async function handleScan(selectedFile) {
+    if (!selectedFile) return;
+    if (scanEs) { scanEs.close(); scanEs = null; }
+
+    scanFile               = selectedFile;
+    scanResult             = null;
+    scanLogs               = [];
+    scanBehavioralPatterns = [];
+    scanLogsVisible        = true;
+
+    scanShowResults();
+
+    const logsList = document.getElementById('scan-logs-list');
+    if (logsList)   logsList.innerHTML = '';
+    const logsSection = document.getElementById('scan-logs-section');
+    if (logsSection) logsSection.style.display = 'none';
+    const confBar = document.getElementById('scan-confidence-bar');
+    if (confBar)   confBar.style.display = 'none';
+    const stopBtn = document.getElementById('scan-stop-btn');
+    if (stopBtn)   stopBtn.style.display = '';
+
+    scanSetProgress(5);
+
+    const hash  = await scanComputeHash(selectedFile);
+    scanFileInfo = {
+        name : selectedFile.name,
+        size : scanFormatFileSize(selectedFile.size),
+        type : scanGetFileType(selectedFile.name),
+        hash,
+    };
+
+    const nameEl = document.getElementById('scan-file-name');
+    if (nameEl) nameEl.textContent = 'Scanning: ' + selectedFile.name;
+
+    const metaGrid = document.getElementById('scan-meta-grid');
+    if (metaGrid) {
+        metaGrid.innerHTML =
+            '<div><span class="scan-meta-label">File Name:</span> <span>' + scanFileInfo.name + '</span></div>' +
+            '<div><span class="scan-meta-label">Size:</span> <span>' + scanFileInfo.size + '</span></div>' +
+            '<div><span class="scan-meta-label">Type:</span> <span>' + scanFileInfo.type + '</span></div>' +
+            '<div><span class="scan-meta-label">Hash:</span> <span class="scan-hash">' + scanFileInfo.hash + '</span></div>';
+    }
+
+    const token = localStorage.getItem('access_token');
+
+    try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+
+        const res = await fetch(API_BASE + '/predict/staged?run_sandbox=true', {
+            method  : 'POST',
+            headers : token ? { 'Authorization': 'Bearer ' + token } : {},
+            body    : formData,
+        });
+
+        if (!res.ok) {
+            const msg = await res.text();
+            throw new Error('HTTP ' + res.status + ': ' + msg);
+        }
+
+        const { job_id } = await res.json();
+
+        const es = new EventSource(API_BASE + '/scan/' + job_id + '/stream?token=' + encodeURIComponent(token || ''));
+        scanEs = es;
+        let logCount = 0;
+
+        es.onmessage = (e) => {
+            let msg;
+            try { msg = JSON.parse(e.data); } catch { return; }
+
+            if (msg.type === 'log') {
+                logCount++;
+                scanSetProgress(Math.min(90, 5 + logCount * 6));
+                scanAddLog(msg.msg, 'success');
+
+            } else if (msg.type === 'result') {
+                const data = msg.data;
+                scanSetProgress(100);
+                scanAddLog('✔ Final classification: ' + data.prediction_label, 'success');
+                scanResult = {
+                    confidence   : (data.confidence * 100).toFixed(1),
+                    is_malicious : data.is_malicious,
+                    prediction   : data.prediction_label,
+                    method       : data.detection_method,
+                    scan_id      : data.scan_id || null,
+                };
+
+                if (data.is_malicious) {
+                    quarantinedFiles.push({
+                        name       : selectedFile.name,
+                        date       : new Date().toLocaleString(),
+                        confidence : (data.confidence * 100).toFixed(1) + '%',
+                    });
+                    scanRenderQuarantine();
+
+                    if (data.scan_id) {
+                        fetch(API_BASE + '/logs/scans/' + data.scan_id + '?include=behavioral_patterns', {
+                            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                        })
+                        .then(r => r.ok ? r.json() : null)
+                        .then(body => {
+                            if (!body || !body.behavioral_patterns || !body.behavioral_patterns.length) return;
+                            const raw = body.behavioral_patterns[0].raw_patterns;
+                            if (!raw) return;
+                            scanBehavioralPatterns = Object.entries(raw)
+                                .filter(([, v]) => v.detected)
+                                .slice(0, 5)
+                                .map(([k, v]) => ({
+                                    label       : k,
+                                    confidence  : v.confidence ? (v.confidence * 100).toFixed(0) + '%' : null,
+                                    description : v.description || '',
+                                    evidence    : v.evidence || [],
+                                }));
+                        })
+                        .catch(() => {});
+                    }
+                }
+
+                scanRenderConfidence();
+                if (stopBtn) stopBtn.style.display = 'none';
+                es.close();
+                scanEs = null;
+
+            } else if (msg.type === 'error') {
+                scanAddLog(msg.msg, 'error');
+                scanSetProgress(0);
+                if (stopBtn) stopBtn.style.display = 'none';
+                es.close();
+                scanEs = null;
+            }
+        };
+
+        es.onerror = () => {
+            scanAddLog('Stream connection lost', 'error');
+            if (stopBtn) stopBtn.style.display = 'none';
+            es.close();
+            scanEs = null;
+        };
+
+    } catch (err) {
+        console.error('Scan error:', err);
+        scanAddLog('Scan failed \u2014 ' + err.message, 'error');
+        scanSetProgress(0);
+        if (stopBtn) stopBtn.style.display = 'none';
+    }
+}
+
+function handleStop() {
+    if (scanEs) { scanEs.close(); scanEs = null; }
+    scanSetProgress(0);
+    scanAddLog('Scan stopped by user', 'error');
+    const stopBtn = document.getElementById('scan-stop-btn');
+    if (stopBtn) stopBtn.style.display = 'none';
+}
+
+function initScanPanel() {
+    const fileBtn      = document.getElementById('scan-file-btn');
+    const fileInput    = document.getElementById('scan-file-input');
+    const dropzone     = document.getElementById('scan-dropzone');
+    const stopBtn      = document.getElementById('scan-stop-btn');
+    const expandBtn    = document.getElementById('scan-logs-expand');
+    const toggleBtn    = document.getElementById('scan-logs-toggle');
+    const overlay      = document.getElementById('logs-modal-overlay');
+    const closeBtn     = document.getElementById('logs-modal-close');
+    const closeBtnFt   = document.getElementById('logs-modal-close-btn');
+
+    if (fileBtn)   fileBtn.addEventListener('click', () => fileInput && fileInput.click());
+
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            const f = e.target.files[0];
+            if (f) handleScan(f);
+        });
+    }
+
+    if (dropzone) {
+        dropzone.addEventListener('dragover',  (e) => { e.preventDefault(); dropzone.classList.add('scan-dropzone-active'); });
+        dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('scan-dropzone-active'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('scan-dropzone-active');
+            const f = e.dataTransfer.files[0];
+            if (f) handleScan(f);
+        });
+    }
+
+    if (stopBtn)   stopBtn.addEventListener('click', handleStop);
+
+    if (expandBtn) {
+        expandBtn.addEventListener('click', () => {
+            scanRenderModal();
+            if (overlay) overlay.style.display = '';
+        });
+    }
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            scanLogsVisible = !scanLogsVisible;
+            const list = document.getElementById('scan-logs-list');
+            if (list) list.style.display = scanLogsVisible ? '' : 'none';
+            toggleBtn.textContent = scanLogsVisible ? 'Hide Scan Logs' : 'Show Scan Logs';
+        });
+    }
+
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.style.display = 'none';
+        });
+    }
+
+    if (closeBtn)   closeBtn.addEventListener('click',   () => { if (overlay) overlay.style.display = 'none'; });
+    if (closeBtnFt) closeBtnFt.addEventListener('click', () => { if (overlay) overlay.style.display = 'none'; });
+}
+
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
     populateDashboard();
@@ -737,14 +994,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Redraw on resize (debounced) — uses the live score, not a hardcoded value
+    // Redraw charts on resize (debounced)
     let resizeTimer;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
-            drawGauge(document.getElementById('gauge'), currentGaugeValue);
             drawLineChart(1);
             drawBarChart(1);
         }, 150);
     });
+
+    initScanPanel();
 });

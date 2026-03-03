@@ -2,21 +2,6 @@ import React, { useState, useRef, useCallback } from 'react';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
 
-function authHeaders() {
-    const token = localStorage.getItem('access_token');
-    return token ? { 'Authorization': 'Bearer ' + token } : {};
-}
-
-const ANALYSIS_STEPS = [
-    'Extracting file metadata..',
-    'Computing SHA-256 hash...',
-    'Static signature comparison...',
-    'PE header anomaly detection...',
-    'Embedded string entropy analysis..',
-    'Behavioral pattern prediction...',
-    'Final classification generated',
-];
-
 const ScanFile = () => {
     const [file, setFile] = useState(null);
     const [scanning, setScanning] = useState(false);
@@ -28,8 +13,9 @@ const ScanFile = () => {
     const [quarantinedFiles, setQuarantinedFiles] = useState([]);
     const [dragOver, setDragOver] = useState(false);
     const [logsExpanded, setLogsExpanded] = useState(false);
+    const [behavioralPatterns, setBehavioralPatterns] = useState([]);
     const fileInputRef = useRef(null);
-    const abortRef = useRef(false);
+    const esRef = useRef(null);   // holds the active EventSource so Stop can close it
 
     const formatFileSize = (bytes) => {
         if (bytes < 1024) return bytes + ' B';
@@ -55,118 +41,136 @@ const ScanFile = () => {
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     };
 
-    const simulateProgress = (onStep) => {
-        return new Promise((resolve) => {
-            let current = 0;
-            const steps = ANALYSIS_STEPS.length;
-            let stepIndex = 0;
-
-            const interval = setInterval(() => {
-                if (abortRef.current) {
-                    clearInterval(interval);
-                    resolve(false);
-                    return;
-                }
-
-                current += Math.random() * 8 + 3;
-                if (current > 95) current = 95;
-                setProgress(Math.round(current));
-
-                const expectedStep = Math.floor((current / 95) * steps);
-                while (stepIndex < expectedStep && stepIndex < steps) {
-                    onStep(stepIndex);
-                    stepIndex++;
-                }
-
-                if (current >= 95) {
-                    clearInterval(interval);
-                    resolve(true);
-                }
-            }, 400);
-        });
-    };
-
     const handleScan = useCallback(async (selectedFile) => {
         if (!selectedFile) return;
 
-        abortRef.current = false;
+        // Close any previous stream
+        if (esRef.current) { esRef.current.close(); esRef.current = null; }
+
         setScanning(true);
-        setProgress(0);
+        setProgress(5);
         setScanResult(null);
         setAnalysisLogs([]);
+        setBehavioralPatterns([]);
         setShowLogs(true);
 
-        // Compute file info
+        // File info + hash
         const hash = await computeHash(selectedFile);
         setFileInfo({
             name: selectedFile.name,
             size: formatFileSize(selectedFile.size),
             type: getFileType(selectedFile.name),
-            hash: hash,
+            hash,
         });
 
-        // Build log entries as progress runs
-        const logs = [];
-        const warnings = [];
+        const token = localStorage.getItem('access_token');
 
-        const progressDone = await simulateProgress((stepIdx) => {
-            logs.push({ text: ANALYSIS_STEPS[stepIdx], status: 'success' });
-            setAnalysisLogs([...logs]);
-        });
-
-        if (!progressDone) {
-            setScanning(false);
-            setProgress(0);
-            return;
-        }
-
-        // Actual API call
         try {
+            // ── Step 1: POST → get job_id immediately ──────────────────────
             const formData = new FormData();
             formData.append('file', selectedFile);
 
-            const res = await fetch(`${API_BASE}/api/detections/predict`, {
+            const res = await fetch(`${API_BASE}/predict/staged?run_sandbox=true`, {
                 method: 'POST',
-                headers: authHeaders(),
+                headers: token ? { 'Authorization': 'Bearer ' + token } : {},
                 body: formData,
             });
 
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-
-            // Add any warning logs
-            if (data.is_malicious) {
-                warnings.push({ text: 'Suspicious registry modification pattern found', status: 'warning' });
+            if (!res.ok) {
+                const msg = await res.text();
+                throw new Error(`HTTP ${res.status}: ${msg}`);
             }
 
-            // Final step
-            const finalLogs = [
-                ...logs,
-                ...warnings,
-                { text: 'Final classification generated', status: 'success' },
-            ];
-            setAnalysisLogs(finalLogs);
-            setProgress(100);
+            const { job_id } = await res.json();
 
-            setScanResult({
-                confidence: (data.confidence * 100).toFixed(1),
-                is_malicious: data.is_malicious,
-                prediction: data.prediction_label,
-            });
+            // ── Step 2: Open SSE stream ─────────────────────────────────────
+            // EventSource can't set Authorization header — token goes as query param
+            const es = new EventSource(`${API_BASE}/scan/${job_id}/stream?token=${encodeURIComponent(token || '')}`);
+            esRef.current = es;
 
-            // Auto-quarantine if malicious
-            if (data.is_malicious) {
-                setQuarantinedFiles(prev => [...prev, {
-                    name: selectedFile.name,
-                    date: new Date().toLocaleString(),
-                    confidence: (data.confidence * 100).toFixed(1) + '%',
-                }]);
-            }
+            let logCount = 0;
+
+            es.onmessage = (e) => {
+                let msg;
+                try { msg = JSON.parse(e.data); } catch { return; }
+
+                if (msg.type === 'log') {
+                    logCount++;
+                    // Advance progress from 5 → 90 as logs arrive (capped until result)
+                    setProgress(Math.min(90, 5 + logCount * 6));
+                    setAnalysisLogs(prev => [...prev, { text: msg.msg, status: 'success' }]);
+
+                } else if (msg.type === 'result') {
+                    const data = msg.data;
+                    console.log('[ScanFile] SSE result received:', data);
+                    setProgress(100);
+                    setAnalysisLogs(prev => [
+                        ...prev,
+                        { text: `✔ Final classification: ${data.prediction_label}`, status: 'success' },
+                    ]);
+                    setScanResult({
+                        confidence: (data.confidence * 100).toFixed(1),
+                        is_malicious: data.is_malicious,
+                        prediction: data.prediction_label,
+                        method: data.detection_method,
+                        scan_id: data.scan_id ?? null,
+                    });
+                    if (data.is_malicious) {
+                        setQuarantinedFiles(prev => [...prev, {
+                            name: selectedFile.name,
+                            date: new Date().toLocaleString(),
+                            confidence: (data.confidence * 100).toFixed(1) + '%',
+                        }]);
+                        // Fetch behavioral patterns if we have a scan_id
+                        if (data.scan_id) {
+                            console.log('[ScanFile] Fetching behavioral patterns for scan_id:', data.scan_id);
+                            fetch(`${API_BASE}/logs/scans/${data.scan_id}?include=behavioral_patterns`, {
+                                headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                            })
+                                .then(r => r.ok ? r.json() : null)
+                                .then(body => {
+                                    if (!body?.behavioral_patterns?.length) return;
+                                    const raw = body.behavioral_patterns[0].raw_patterns;
+                                    if (!raw) return;
+                                    // Keep only detected:true entries, max 5
+                                    const detected = Object.entries(raw)
+                                        .filter(([, v]) => v?.detected === true)
+                                        .slice(0, 5)
+                                        .map(([key, v]) => ({
+                                            label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                                            description: v.description || '',
+                                            evidence: Array.isArray(v.evidence) ? v.evidence : [],
+                                            confidence: v.confidence || '',
+                                        }));
+                                    setBehavioralPatterns(detected);
+                                })
+                                .catch(() => {});
+                        }
+                    }
+                    setScanning(false);
+                    es.close();
+                    esRef.current = null;
+
+                } else if (msg.type === 'error') {
+                    setAnalysisLogs(prev => [...prev, { text: msg.msg, status: 'error' }]);
+                    setProgress(0);
+                    setScanning(false);
+                    es.close();
+                    esRef.current = null;
+                }
+            };
+
+            es.onerror = () => {
+                setAnalysisLogs(prev => [...prev, { text: 'Stream connection lost', status: 'error' }]);
+                setScanning(false);
+                es.close();
+                esRef.current = null;
+            };
+
         } catch (err) {
             console.error('Scan error:', err);
-            setAnalysisLogs([...logs, { text: 'Scan failed — check backend connection', status: 'error' }]);
+            setAnalysisLogs([{ text: `Scan failed — ${err.message}`, status: 'error' }]);
             setProgress(0);
-        } finally {
             setScanning(false);
         }
     }, []);
@@ -184,9 +188,10 @@ const ScanFile = () => {
     };
 
     const handleStop = () => {
-        abortRef.current = true;
+        if (esRef.current) { esRef.current.close(); esRef.current = null; }
         setScanning(false);
         setProgress(0);
+        setAnalysisLogs(prev => [...prev, { text: 'Scan stopped by user', status: 'error' }]);
     };
 
     const removeQuarantined = (index) => {
@@ -356,23 +361,27 @@ const ScanFile = () => {
                                 </div>
                             ))}
 
-                            {/* Suspicious patterns detail (shown for malicious results) */}
-                            {scanResult?.is_malicious && (
+                            {/* Behavioral patterns from DB */}
+                            {scanResult?.is_malicious && behavioralPatterns.length > 0 && (
                                 <div className="logs-modal-warning-detail">
                                     <div className="logs-modal-entry logs-modal-warning">
                                         <span className="logs-modal-icon">⚠️</span>
-                                        <span>Suspicious registry modification pattern found:</span>
+                                        <span>Detected behavioral patterns ({behavioralPatterns.length}):</span>
                                     </div>
-                                    <ul className="logs-modal-pattern-list">
-                                        <li>
-                                            <code>HKCU\Software\Microsoft\Windows\CurrentVersion\Run\svchost</code> :
-                                            <code>C:\Users\user\AppData\Roaming\svchost.exe</code>
-                                        </li>
-                                        <li>
-                                            <code>HKCU\Software\Classes\ms-settings\shell\open\command\(Default)</code> :
-                                            <code>cmd.exe /c whoami</code>
-                                        </li>
-                                    </ul>
+                                    {behavioralPatterns.map((p, i) => (
+                                        <div key={i} className="logs-modal-pattern-item">
+                                            <div className="logs-modal-pattern-title">
+                                                <code>{p.label}</code>
+                                                {p.confidence && <span className="pattern-confidence">{p.confidence}</span>}
+                                            </div>
+                                            <p className="logs-modal-pattern-desc">{p.description}</p>
+                                            {p.evidence.length > 0 && (
+                                                <ul className="logs-modal-pattern-list">
+                                                    {p.evidence.map((ev, j) => <li key={j}><code>{ev}</code></li>)}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    ))}
                                 </div>
                             )}
 
