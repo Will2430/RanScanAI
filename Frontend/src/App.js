@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import AdminDash from './pages/admindashboard_page';
 import AdminRegisterUser from './pages/Adminregisteruser';
 import ManageUsers from './pages/ManageUsers';
+import UncertainSampleDetail from './pages/UncertainSampleDetail';
 
 const App = () => {
   return (
@@ -17,6 +18,7 @@ const App = () => {
         <Route path="/admin-dashboard" element={<AdminDash />} />
         <Route path="/admin-register-user" element={<AdminRegisterUser />} />
         <Route path="/admin-manage-users" element={<ManageUsers />} />
+        <Route path="/admin/uncertain-sample/:detectionId" element={<UncertainSampleDetail />} />
       </Routes>
     </Router>
   );

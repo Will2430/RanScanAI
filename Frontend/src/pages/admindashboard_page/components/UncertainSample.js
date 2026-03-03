@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const ROWS_PER_PAGE = 10;
 
 const UncertainSample = () => {
+    const navigate = useNavigate();
     const [samples, setSamples] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -155,14 +157,15 @@ const UncertainSample = () => {
                     <div className="table-wrapper">
                         <table className="data-table" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
-                                <col style={{ width: '5%' }} />   {/* # */}
-                                <col style={{ width: '26%' }} />  {/* File Name */}
-                                <col style={{ width: '12%' }} />  {/* User */}
-                                <col style={{ width: '8%' }} />   {/* Role */}
-                                <col style={{ width: '12%' }} />  {/* AI Prediction */}
-                                <col style={{ width: '10%' }} />  {/* Confidence */}
-                                <col style={{ width: '18%' }} />  {/* Date */}
-                                <col style={{ width: '9%' }} />   {/* Actions */}
+                                <col style={{ width: '4%' }} />   {/* # */}
+                                <col style={{ width: '22%' }} />  {/* File Name */}
+                                <col style={{ width: '10%' }} />  {/* User */}
+                                <col style={{ width: '7%' }} />   {/* Role */}
+                                <col style={{ width: '10%' }} />  {/* AI Prediction */}
+                                <col style={{ width: '9%' }} />   {/* Confidence */}
+                                <col style={{ width: '16%' }} />  {/* Date */}
+                                <col style={{ width: '6%' }} />   {/* View */}
+                                <col style={{ width: '16%' }} />  {/* Actions */}
                             </colgroup>
                             <thead>
                                 <tr>
@@ -173,6 +176,7 @@ const UncertainSample = () => {
                                     <th>AI Prediction</th>
                                     <th>Confidence</th>
                                     <th>Date &amp; Time</th>
+                                    <th>Details</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -206,6 +210,25 @@ const UncertainSample = () => {
                                         </td>
                                         <td style={{ fontSize: '0.88rem', color: '#555' }}>
                                             {sample.date || sample.display_time}
+                                        </td>
+                                        <td style={{ textAlign: 'center' }}>
+                                            <button
+                                                onClick={() => navigate(`/admin/uncertain-sample/${sample.id}`)}
+                                                title="View full details"
+                                                style={{
+                                                    padding: '4px 10px',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #4a90d9',
+                                                    backgroundColor: '#e8f0fe',
+                                                    color: '#1a56db',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 600,
+                                                    whiteSpace: 'nowrap',
+                                                }}
+                                            >
+                                                🔎 View
+                                            </button>
                                         </td>
                                         <td>
                                             <div style={{ display: 'flex', gap: '5px' }}>
