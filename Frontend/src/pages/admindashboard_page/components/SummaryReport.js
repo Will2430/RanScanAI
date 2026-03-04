@@ -164,7 +164,7 @@ const LineChart = ({ data }) => {
 /* ═══════════════════════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════ */
-const SummaryReport = () => {
+const SummaryReport = ({ month }) => {
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -172,13 +172,16 @@ const SummaryReport = () => {
 
     useEffect(() => {
         fetchSummaryReport();
-    }, []);
+    }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const fetchSummaryReport = async () => {
         setLoading(true);
         setError('');
         try {
-            const res = await fetch(`${API_BASE}/api/detections/admin/summary-report`, {
+            const url = month
+                ? `${API_BASE}/api/detections/admin/summary-report?month=${encodeURIComponent(month)}`
+                : `${API_BASE}/api/detections/admin/summary-report`;
+            const res = await fetch(url, {
                 headers: authHeaders(),
             });
 

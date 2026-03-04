@@ -669,37 +669,72 @@ async def submit_detection_review(
 
 @router.get("/admin/summary-report", response_model=SummaryReportResponse)
 async def get_summary_report(
+    month: Optional[str] = Query(None, description="Optional month in YYYY-MM format to filter (e.g., 2026-03). Omit for all-time."),
     admin: User = Depends(get_current_admin),
 ):
     """
     Admin-only: Get a comprehensive summary report aggregating data across ALL users.
+    Optionally filter by a specific month (YYYY-MM).
     Includes detection rate, threat snapshot, per-user classification, trends, and system score.
     """
     from sqlalchemy import select, func, and_, extract, case, desc
 
     SessionLocal = get_session_maker()
 
+    # Parse optional month filter
+    month_filter = None
+    filter_year = None
+    filter_month = None
+    if month:
+        try:
+            parts = month.split('-')
+            if len(parts) != 2:
+                raise ValueError
+            filter_year = int(parts[0])
+            filter_month = int(parts[1])
+            if filter_month < 1 or filter_month > 12:
+                raise ValueError
+            month_filter = and_(
+                extract('year', ScanHistory.timestamp) == filter_year,
+                extract('month', ScanHistory.timestamp) == filter_month,
+            )
+        except (ValueError, IndexError):
+            raise HTTPException(status_code=400, detail="Invalid month format. Use YYYY-MM (e.g., 2026-03)")
+
     try:
         async with SessionLocal() as session:
             # --- Totals ---
-            total_scans = await session.scalar(select(func.count(ScanHistory.id))) or 0
-            total_malicious = await session.scalar(
-                select(func.count(ScanHistory.id)).where(ScanHistory.is_malicious == True)  # noqa: E712
-            ) or 0
+            base_count = select(func.count(ScanHistory.id))
+            if month_filter is not None:
+                base_count = base_count.where(month_filter)
+            total_scans = await session.scalar(base_count) or 0
+
+            mal_count = select(func.count(ScanHistory.id)).where(ScanHistory.is_malicious == True)  # noqa: E712
+            if month_filter is not None:
+                mal_count = mal_count.where(month_filter)
+            total_malicious = await session.scalar(mal_count) or 0
+
             total_benign = total_scans - total_malicious
             detection_rate = round((total_malicious / total_scans) * 100, 1) if total_scans else 0.0
 
-            total_users = await session.scalar(select(func.count(User.user_id))) or 0
+            # Count users who have scans in the period (or all users if no filter)
+            if month_filter is not None:
+                total_users = await session.scalar(
+                    select(func.count(func.distinct(ScanHistory.user_id))).where(month_filter)
+                ) or 0
+            else:
+                total_users = await session.scalar(select(func.count(User.user_id))) or 0
 
-            # --- Threat Snapshot (all malicious detections, newest first, limit 50) ---
+            # --- Threat Snapshot (malicious detections, newest first, limit 50) ---
             from sqlalchemy.orm import selectinload
             threat_stmt = (
                 select(ScanHistory)
                 .options(selectinload(ScanHistory.user))
                 .where(ScanHistory.is_malicious == True)  # noqa: E712
-                .order_by(desc(ScanHistory.timestamp))
-                .limit(50)
             )
+            if month_filter is not None:
+                threat_stmt = threat_stmt.where(month_filter)
+            threat_stmt = threat_stmt.order_by(desc(ScanHistory.timestamp)).limit(50)
             threat_result = await session.execute(threat_stmt)
             threat_rows = list(threat_result.scalars().all())
 
@@ -724,9 +759,10 @@ async def get_summary_report(
                 )
                 .select_from(User)
                 .outerjoin(ScanHistory)
-                .group_by(User.user_id, User.username)
-                .order_by(User.username)
             )
+            if month_filter is not None:
+                user_stmt = user_stmt.where(month_filter)
+            user_stmt = user_stmt.group_by(User.user_id, User.username).order_by(User.username)
             user_result = await session.execute(user_stmt)
             user_rows = user_result.all()
             user_activity = [
@@ -749,9 +785,10 @@ async def get_summary_report(
                     func.sum(case((ScanHistory.is_malicious == True, 1), else_=0)).label('malicious'),  # noqa: E712
                     func.sum(case((ScanHistory.is_malicious == False, 1), else_=0)).label('benign'),  # noqa: E712
                 )
-                .group_by(yr_col, mo_col)
-                .order_by(yr_col, mo_col)
             )
+            if month_filter is not None:
+                trend_stmt = trend_stmt.where(month_filter)
+            trend_stmt = trend_stmt.group_by(yr_col, mo_col).order_by(yr_col, mo_col)
             trend_result = await session.execute(trend_stmt)
             trend_rows = trend_result.all()
 
@@ -767,17 +804,23 @@ async def get_summary_report(
             ]
 
             # --- WannaCry / high-confidence ransomware count ---
-            wannacry_count = await session.scalar(
+            wc_stmt = (
                 select(func.count(ScanHistory.id))
                 .where(ScanHistory.is_malicious == True)  # noqa: E712
                 .where(ScanHistory.confidence >= 0.9)
-            ) or 0
+            )
+            if month_filter is not None:
+                wc_stmt = wc_stmt.where(month_filter)
+            wannacry_count = await session.scalar(wc_stmt) or 0
 
             # --- AI reclassified (admin_review == True) ---
-            ai_reclassified = await session.scalar(
+            ar_stmt = (
                 select(func.count(ScanHistory.id))
                 .where(ScanHistory.admin_review == True)  # noqa: E712
-            ) or 0
+            )
+            if month_filter is not None:
+                ar_stmt = ar_stmt.where(month_filter)
+            ai_reclassified = await session.scalar(ar_stmt) or 0
 
             # --- Compute system score ---
             # Score: 100 minus penalty for malicious ratio, capped at 0
@@ -813,7 +856,12 @@ async def get_summary_report(
                 )
 
             now = datetime.utcnow()
-            report_title = f"{now.strftime('%Y %B')} RanScanAI Summary Report"
+            month_names = ["January", "February", "March", "April", "May", "June",
+                           "July", "August", "September", "October", "November", "December"]
+            if filter_year and filter_month:
+                report_title = f"{month_names[filter_month - 1]} {filter_year} RanScanAI Summary Report"
+            else:
+                report_title = f"{now.strftime('%Y %B')} RanScanAI Summary Report"
             generated_date = now.strftime("%d %B %Y")
 
             return SummaryReportResponse(
@@ -836,6 +884,89 @@ async def get_summary_report(
 
     except Exception as e:
         logger.error(f"Admin: Failed to generate summary report: {e}")
+        raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+
+
+# ---------- Available Months for Summary Table ----------
+
+class MonthSummaryRow(BaseModel):
+    """One row in the monthly summary table."""
+    month: str          # "YYYY-MM"
+    month_label: str    # "March 2026"
+    total_scans: int
+    total_malicious: int
+    total_benign: int
+    detection_rate: float
+    critical_count: int
+    total_users: int
+
+
+class AvailableMonthsResponse(BaseModel):
+    """Response listing all months that have scan data."""
+    months: List[MonthSummaryRow]
+
+
+@router.get("/admin/available-months", response_model=AvailableMonthsResponse)
+async def get_available_months(
+    admin: User = Depends(get_current_admin),
+):
+    """
+    Admin-only: List all months that have scan data with summary statistics.
+    Used by the admin dashboard monthly summary table.
+    """
+    from sqlalchemy import select, func, extract, case, and_, desc
+
+    SessionLocal = get_session_maker()
+
+    try:
+        async with SessionLocal() as session:
+            yr_col = extract('year', ScanHistory.timestamp).label('yr')
+            mo_col = extract('month', ScanHistory.timestamp).label('mo')
+
+            stmt = (
+                select(
+                    yr_col,
+                    mo_col,
+                    func.count(ScanHistory.id).label('total_scans'),
+                    func.sum(case((ScanHistory.is_malicious == True, 1), else_=0)).label('malicious'),  # noqa: E712
+                    func.sum(case((ScanHistory.is_malicious == False, 1), else_=0)).label('benign'),  # noqa: E712
+                    func.sum(case((and_(ScanHistory.is_malicious == True, ScanHistory.confidence >= 0.9), 1), else_=0)).label('critical'),  # noqa: E712
+                    func.count(func.distinct(ScanHistory.user_id)).label('user_count'),
+                )
+                .where(ScanHistory.timestamp.isnot(None))
+                .group_by(yr_col, mo_col)
+                .order_by(desc(yr_col), desc(mo_col))
+            )
+
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            month_names = ["January", "February", "March", "April", "May", "June",
+                           "July", "August", "September", "October", "November", "December"]
+
+            months = []
+            for row in rows:
+                total = int(row.total_scans or 0)
+                mal = int(row.malicious or 0)
+                ben = int(row.benign or 0)
+                rate = round((mal / total) * 100, 1) if total else 0.0
+                yr = int(row.yr)
+                mo = int(row.mo)
+                months.append(MonthSummaryRow(
+                    month=f"{yr}-{mo:02d}",
+                    month_label=f"{month_names[mo - 1]} {yr}",
+                    total_scans=total,
+                    total_malicious=mal,
+                    total_benign=ben,
+                    detection_rate=rate,
+                    critical_count=int(row.critical or 0),
+                    total_users=int(row.user_count or 0),
+                ))
+
+            return AvailableMonthsResponse(months=months)
+
+    except Exception as e:
+        logger.error(f"Admin: Failed to fetch available months: {e}")
         raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
 
 
