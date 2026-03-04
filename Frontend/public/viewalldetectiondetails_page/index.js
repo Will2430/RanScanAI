@@ -154,7 +154,6 @@ const ViewAllDetectionDetails = () => {
             <header className="vad-header">
                 <div className="vad-header-left">
                     <a className="vad-logo" href="/userdashboard_page/RSA_userdashboard.html" aria-label="Go to dashboard">
-                        <img src="/userdashboard_page/RSA_logo.png" alt="RanScanAI logo" className="vad-logo-img" />
                         <span className="vad-logo-text">
                             <span className="vad-logo-ran">Ran</span>
                             <span className="vad-logo-scan">Scan</span>

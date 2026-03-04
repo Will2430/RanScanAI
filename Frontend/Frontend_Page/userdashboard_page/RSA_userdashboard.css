@@ -86,12 +86,19 @@ body {
 
 .topbar-left { display: flex; align-items: center; }
 
-.logo { display: flex; align-items: center; gap: 8px; }
-.logo-img { width: 28px; height: 28px; object-fit: contain; }
-.logo-text { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
-.logo-ran  { color: var(--brand-red); }
-.logo-scan { color: #94A3B8; }
-.logo-ai   { color: #818CF8; }
+.logo { display: flex; align-items: center; }
+.logo-text {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    background: #1a1a1a;
+    padding: 8px 14px 6px;
+    border-radius: 4px;
+}
+.logo-ran  { color: #CC3333; }
+.logo-scan { color: #9CA3AF; }
+.logo-ai   { color: #9CA3AF; }
 
 .topbar-sep { width: 1px; height: 24px; background: rgba(255,255,255,.15); }
 

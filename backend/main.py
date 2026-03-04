@@ -1,5 +1,5 @@
 """
-SecureGuard Backend - Privacy-First Malware Detection API
+RanScanAI Backend - Privacy-First Malware Detection API
 FastAPI server for local malware scanning with ML model
 """
 

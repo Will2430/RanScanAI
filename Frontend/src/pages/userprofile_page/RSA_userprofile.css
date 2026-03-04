@@ -86,14 +86,7 @@ body {
 .logo {
     display: flex;
     align-items: center;
-    gap: 10px;
     text-decoration: none;
-}
-
-.logo-img {
-    width: 34px;
-    height: 34px;
-    object-fit: contain;
 }
 
 .logo-text {
@@ -101,11 +94,14 @@ body {
     font-weight: 800;
     letter-spacing: -0.02em;
     line-height: 1;
+    background: #1a1a1a;
+    padding: 8px 14px 6px;
+    border-radius: 4px;
 }
 
-.logo-ran { color: var(--brand-red); }
-.logo-scan { color: #ffffff; }
-.logo-ai { color: #8B9FE8; }
+.logo-ran { color: #CC3333; }
+.logo-scan { color: #9CA3AF; }
+.logo-ai { color: #9CA3AF; }
 
 .header-divider {
     width: 1px;
