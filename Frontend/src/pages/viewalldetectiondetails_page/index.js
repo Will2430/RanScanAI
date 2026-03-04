@@ -278,14 +278,7 @@ const ViewAllDetectionDetails = () => {
                                         <span className="vad-info-label">Model</span>
                                         <span className="vad-info-value">{detection.model_type || '—'}</span>
                                     </div>
-                                    <div className="vad-info-row">
-                                        <span className="vad-info-label">Features Analyzed</span>
-                                        <span className="vad-info-value">
-                                            {detection.features_analyzed != null
-                                                ? detection.features_analyzed.toLocaleString()
-                                                : '—'}
-                                        </span>
-                                    </div>
+
                                 </div>
                             </section>
 

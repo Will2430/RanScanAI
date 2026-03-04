@@ -474,6 +474,36 @@ async def change_password(
             detail="Current password is incorrect"
         )
     
+    # Check new password is different from old
+    if password_data.new_password == password_data.old_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from old password"
+        )
+    
+    # Validate password strength
+    new_pw = password_data.new_password
+    has_upper = any(c.isupper() for c in new_pw)
+    has_lower = any(c.islower() for c in new_pw)
+    has_digit = any(c.isdigit() for c in new_pw)
+    has_special = any(c in '!@#$%^&*()_+-=[]{};\':"|,.<>?/' for c in new_pw)
+    
+    missing = []
+    if not has_upper:
+        missing.append('uppercase letter')
+    if not has_lower:
+        missing.append('lowercase letter')
+    if not has_digit:
+        missing.append('number')
+    if not has_special:
+        missing.append('special character (!@#$%^&* etc.)')
+    
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Password must contain: {', '.join(missing)}"
+        )
+    
     # Hash and update new password
     current_user.password_hash = hash_password(password_data.new_password)
     current_user.updated_at = datetime.utcnow()
