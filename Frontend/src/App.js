@@ -9,6 +9,7 @@ import ManageUsers from './pages/ManageUsers';
 import UncertainSampleDetail from './pages/UncertainSampleDetail';
 import SummaryReportPage from './pages/SummaryReportPage';
 import ViewAllDetectionDetails from './pages/viewalldetectiondetails_page';
+import RetrainCenter from './pages/admindashboard_page/components/RetrainCenter';
 
 const App = () => {
   return (
@@ -21,6 +22,7 @@ const App = () => {
         <Route path="/admin-register-user" element={<AdminRegisterUser />} />
         <Route path="/admin-manage-users" element={<ManageUsers />} />
         <Route path="/admin/uncertain-sample/:detectionId" element={<UncertainSampleDetail />} />
+        <Route path="/admin/retrain" element={<RetrainCenter />} />
         <Route path="/admin/summary-report/:month" element={<SummaryReportPage />} />
         <Route path="/detection/:detectionId" element={<ViewAllDetectionDetails />} />
       </Routes>

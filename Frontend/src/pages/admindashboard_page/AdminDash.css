@@ -435,6 +435,54 @@
 .data-table th:nth-child(8),
 .data-table td:nth-child(8) { width: 22%; }          /* Date & Time */
 
+/* Uncertain Samples table (10 columns) */
+.uncertain-table th,
+.uncertain-table td {
+    padding: 11px 10px;
+}
+
+.uncertain-table th {
+    font-size: 0.76rem;
+    letter-spacing: 0.04em;
+}
+
+.uncertain-table th:nth-child(1),
+.uncertain-table td:nth-child(1) { width: 5%; }
+.uncertain-table th:nth-child(2),
+.uncertain-table td:nth-child(2) { width: 22%; }
+.uncertain-table th:nth-child(3),
+.uncertain-table td:nth-child(3) { width: 10%; }
+.uncertain-table th:nth-child(4),
+.uncertain-table td:nth-child(4) { width: 8%; }
+.uncertain-table th:nth-child(5),
+.uncertain-table td:nth-child(5) { width: 13%; }
+.uncertain-table th:nth-child(6),
+.uncertain-table td:nth-child(6) { width: 10%; }
+.uncertain-table th:nth-child(7),
+.uncertain-table td:nth-child(7) { width: 15%; }
+.uncertain-table th:nth-child(8),
+.uncertain-table td:nth-child(8) { width: 8%; text-align: center; }
+.uncertain-table th:nth-child(9),
+.uncertain-table td:nth-child(9) { width: 9%; text-align: center; }
+.uncertain-table th:nth-child(10),
+.uncertain-table td:nth-child(10) { width: 16%; }
+
+/* Retrain Center table (7 columns) */
+.retrain-table th:nth-child(1),
+.retrain-table td:nth-child(1) { width: 6%; }
+.retrain-table th:nth-child(2),
+.retrain-table td:nth-child(2) { width: 30%; }
+.retrain-table th:nth-child(3),
+.retrain-table td:nth-child(3) { width: 16%; }
+.retrain-table th:nth-child(4),
+.retrain-table td:nth-child(4) { width: 12%; }
+.retrain-table th:nth-child(5),
+.retrain-table td:nth-child(5) { width: 12%; }
+.retrain-table th:nth-child(6),
+.retrain-table td:nth-child(6) { width: 10%; }
+.retrain-table th:nth-child(7),
+.retrain-table td:nth-child(7) { width: 14%; }
+
 .data-table tbody tr:hover {
     background-color: #f9f9f9;
 }

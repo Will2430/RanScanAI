@@ -93,14 +93,24 @@ except Exception as e:
     logger.warning(f"Unexpected error importing report routes: {e}")
     report_router = None
 
+# Import retrain routes
+try:
+    from retrain_routes import router as retrain_router
+    logger.info("✓ Retrain routes imported successfully")
+except ImportError as e:
+    logger.warning(f"Retrain routes import failed: {e}")
+    retrain_router = None
+except Exception as e:
+    logger.warning(f"Unexpected error importing retrain routes: {e}")
+    retrain_router = None
+
 # Configuration
 # Toggle between Traditional ML and CNN model
 USE_CNN_MODEL = os.getenv("USE_CNN_MODEL", "false").lower() == "true"  # Set to "true" to enable CNN
-CNN_MODEL_SERVICE_URL = os.getenv("CNN_MODEL_SERVICE_URL", "http://127.0.0.1:8001")
+CNN_MODEL_SERVICE_URL = os.getenv("CNN_MODEL_SERVICE_URL", "http://100.73.153.23:8001")
 
 # OR override directly (uncomment to use):
 USE_CNN_MODEL = True  # Change this to True to use CNN model
-CNN_MODEL_SERVICE_URL = "http://127.0.0.1:8001"  # CNN service URL
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -138,6 +148,13 @@ if report_router:
     logger.info("✓ Report routes registered at /api/reports")
 else:
     logger.warning("⚠️ Report routes NOT registered")
+
+# Include retrain routes
+if retrain_router:
+    app.include_router(retrain_router)
+    logger.info("✓ Retrain routes registered at /api/retrain")
+else:
+    logger.warning("⚠️ Retrain routes NOT registered")
 
 # Global instances
 detector: Optional[MalwareDetector] = None
@@ -917,8 +934,6 @@ async def get_log_statistics(db: Optional[AsyncSession] = Depends(get_db_session
         "service": "model_service",
         "statistics": stats
     }
-
-
 
 
 @app.get("/stats")

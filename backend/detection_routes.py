@@ -13,7 +13,10 @@ from typing import Optional, List
 from datetime import datetime
 import logging
 
-from db_manager import get_session_maker, get_session, ScanHistory, User
+from db_manager import (
+    get_session_maker, get_session, ScanHistory, User,
+    get_uncertain_samples_with_vt_status, bulk_approve_uncertain_samples,
+)
 from auth.routes import get_current_user, get_current_admin
 
 logger = logging.getLogger(__name__)
@@ -37,6 +40,10 @@ class DetectionItem(BaseModel):
     username: Optional[str] = None
     role: Optional[str] = None
     admin_review: Optional[bool] = None  # True if an admin has already reviewed this sample
+    # VT queue status — only populated on the /admin/uncertain endpoint
+    vt_status: Optional[str] = None      # PENDING | UPLOADING | SCANNING | VALIDATED | FAILED
+    vt_query_date: Optional[str] = None  # ISO string of when VT was queried
+    queue_id: Optional[int] = None       # uncertain_sample_queue PK (for flush)
 
     class Config:
         from_attributes = True
@@ -553,59 +560,70 @@ async def get_uncertain_samples(
     admin: User = Depends(get_current_admin),
 ):
     """
-    Admin-only: Fetch uncertain samples (confidence between 0.3 and 0.7).
-    These are samples where the AI is not confident about the classification.
+    Admin-only: Fetch uncertain samples (confidence between 0.3 and 0.7) with
+    their associated VT queue status via LEFT JOIN on uncertain_sample_queue.
     """
-    from sqlalchemy import select, desc, func, and_
-
     SessionLocal = get_session_maker()
 
     try:
         async with SessionLocal() as session:
-            uncertain_filter = and_(
-                ScanHistory.confidence >= 0.3,
-                ScanHistory.confidence <= 0.7,
-                ScanHistory.admin_review == False,  # Exclude already-reviewed samples  # noqa: E712
-            )
+            rows = await get_uncertain_samples_with_vt_status(session, limit=limit)
 
-            stmt = (
-                select(ScanHistory)
-                .options(selectinload(ScanHistory.user))
-                .where(uncertain_filter)
-                .order_by(ScanHistory.confidence.asc())  # Show least confident first
-                .limit(limit)
-            )
+            detections = []
+            for row in rows:
+                sh: ScanHistory = row[0]
+                vt_status = row[1]       # may be None
+                vt_query_date = row[2]   # may be None
+                queue_id = row[3]        # may be None
 
-            result = await session.execute(stmt)
-            rows = list(result.scalars().all())
+                detections.append(DetectionItem(
+                    id=sh.id,
+                    file_name=sh.file_name,
+                    timestamp=sh.timestamp.isoformat() if sh.timestamp else "",
+                    display_time=_format_display_time(sh.timestamp) if sh.timestamp else "",
+                    date=_format_display_time(sh.timestamp) if sh.timestamp else "",
+                    is_malicious=sh.is_malicious,
+                    confidence=round(sh.confidence, 4) if sh.confidence else 0.0,
+                    prediction_label=sh.prediction_label or ("MALWARE" if sh.is_malicious else "BENIGN"),
+                    model_type=sh.model_type,
+                    username=sh.user.username if sh.user else None,
+                    role=sh.user.role if sh.user else None,
+                    admin_review=sh.admin_review,
+                    vt_status=vt_status,
+                    vt_query_date=vt_query_date.isoformat() if vt_query_date else None,
+                    queue_id=queue_id,
+                ))
 
-            total_count = await session.scalar(
-                select(func.count(ScanHistory.id)).where(uncertain_filter)
-            ) or 0
-
-            detections = [
-                DetectionItem(
-                    id=row.id,
-                    file_name=row.file_name,
-                    timestamp=row.timestamp.isoformat() if row.timestamp else "",
-                    display_time=_format_display_time(row.timestamp) if row.timestamp else "",
-                    date=_format_display_time(row.timestamp) if row.timestamp else "",
-                    is_malicious=row.is_malicious,
-                    confidence=round(row.confidence, 4) if row.confidence else 0.0,
-                    prediction_label=row.prediction_label or ("MALWARE" if row.is_malicious else "BENIGN"),
-                    model_type=row.model_type,
-                    username=row.user.username if row.user else None,
-                    role=row.user.role if row.user else None,
-                    admin_review=row.admin_review,
-                )
-                for row in rows
-            ]
-
-            return DetectionsResponse(count=total_count, detections=detections)
+            return DetectionsResponse(count=len(detections), detections=detections)
 
     except Exception as e:
         logger.error(f"Admin: Failed to fetch uncertain samples: {e}")
         raise HTTPException(status_code=500, detail=f"Database query failed: {str(e)}")
+
+
+class BulkApproveRequest(BaseModel):
+    """Request body for bulk-approving uncertain samples for retraining."""
+    scan_ids: List[int]
+
+
+@router.post("/admin/bulk-approve")
+async def bulk_approve_for_retrain(
+    body: BulkApproveRequest,
+    admin: User = Depends(get_current_admin),
+):
+    """
+    Admin-only: Mark a list of uncertain samples as approved for retraining
+    by setting admin_review=True on their scan_history rows.
+    """
+    SessionLocal = get_session_maker()
+    try:
+        async with SessionLocal() as session:
+            count = await bulk_approve_uncertain_samples(session, body.scan_ids)
+            logger.info(f"Admin {admin.username} bulk-approved {count} samples for retraining")
+            return {"approved_count": count, "message": f"{count} sample(s) approved for retraining."}
+    except Exception as e:
+        logger.error(f"Admin: bulk-approve failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Bulk approve failed: {str(e)}")
 
 
 @router.post("/admin/review/{detection_id}")

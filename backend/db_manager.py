@@ -3,7 +3,7 @@ Database manager for Azure PostgreSQL
 Handles connections, ORM models, and CRUD operations for terminal logs
 """
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, selectinload
 from datetime import datetime
 from sqlalchemy import String, Text, DateTime, Integer, Boolean, JSON, ForeignKey,text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -339,6 +339,41 @@ class BehavioralPatterns(Base):
         return f"<BehavioralPatterns {self.id}: {self.file_name} - {self.total_patterns_detected} patterns>"
 
 
+class ModelTrainingHistory(Base):
+    """
+    Tracks model training versions and performance metrics.
+    Seeded from cnn_fixed_metadata_20260301_180706.json on first init.
+    Updated by the retrain trigger endpoint after each retraining run.
+    """
+    __tablename__ = "model_training_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trained_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    version: Mapped[str] = mapped_column(String(50), default="1.0")
+    model_type: Mapped[str] = mapped_column(String(50))          # "1D CNN"
+    model_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    dataset: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # Performance metrics
+    accuracy: Mapped[float] = mapped_column()
+    precision: Mapped[Optional[float]] = mapped_column(nullable=True)
+    recall: Mapped[Optional[float]] = mapped_column(nullable=True)
+    f1_score: Mapped[Optional[float]] = mapped_column(nullable=True)
+    fpr: Mapped[Optional[float]] = mapped_column(nullable=True)
+    auc: Mapped[Optional[float]] = mapped_column(nullable=True)
+
+    # Architecture info
+    n_features: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    vocab_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    total_samples: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    def __repr__(self):
+        return f"<ModelTrainingHistory {self.id}: v{self.version} acc={self.accuracy:.4f}>"
+
+
 async def init_db():
     """
     Initialize database tables
@@ -352,9 +387,63 @@ async def init_db():
             # Create tables if they don't exist
             await conn.run_sync(Base.metadata.create_all)
         logger.info("✓ Database tables initialized")
+
+        # Seed ModelTrainingHistory from JSON metadata if table is empty
+        await _seed_model_training_history()
+
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
+
+
+async def _seed_model_training_history():
+    """Seed ModelTrainingHistory with CNN metadata if table is empty."""
+    from sqlalchemy import select, func
+    SessionLocal = get_session_maker()
+    try:
+        async with SessionLocal() as session:
+            count = await session.scalar(select(func.count(ModelTrainingHistory.id)))
+            if count and count > 0:
+                return  # Already seeded
+
+            # Locate metadata JSON relative to this file: ../models/
+            metadata_path = Path(__file__).parent.parent / "models" / "cnn_fixed_metadata_20260301_180706.json"
+            if not metadata_path.exists():
+                logger.warning(f"[SEED] Model metadata not found at {metadata_path}, skipping seed")
+                return
+
+            with open(metadata_path) as f:
+                meta = json.load(f)
+
+            model_path = str(Path(__file__).parent.parent / "models" / "best_fixed_cnn_20260301_180706.keras")
+            trained_at_str = meta.get("timestamp", "2026-03-01T18:55:48")
+            try:
+                trained_at = datetime.fromisoformat(trained_at_str)
+            except Exception:
+                trained_at = datetime(2026, 3, 1, 18, 55, 48)
+
+            seed = ModelTrainingHistory(
+                version="1.0",
+                model_type=meta.get("model_type", "1D CNN"),
+                model_path=model_path,
+                dataset=meta.get("dataset", "Zenodo"),
+                accuracy=meta.get("accuracy", 0.0),
+                precision=meta.get("precision"),
+                recall=meta.get("recall"),
+                f1_score=meta.get("f1_score"),
+                fpr=meta.get("fpr"),
+                auc=meta.get("auc"),
+                n_features=meta.get("n_features"),
+                vocab_size=meta.get("vocab_size"),
+                total_samples=80000,
+                notes="Baseline 1D CNN model — Zenodo dataset",
+                trained_at=trained_at,
+            )
+            session.add(seed)
+            await session.commit()
+            logger.info("✓ ModelTrainingHistory seeded with baseline CNN metrics")
+    except Exception as e:
+        logger.warning(f"[SEED] Could not seed model training history: {e}")
 
 
 async def get_session() -> AsyncSession:
@@ -1102,3 +1191,281 @@ async def get_feedback_statistics(session: AsyncSession) -> Dict[str, Any]:
         "high_severity": high_severity or 0,
         "ready_for_retraining": (pending or 0) >= 100
     }
+
+
+# ============================================================================
+# RETRAIN CENTER CRUD OPERATIONS
+# ============================================================================
+
+async def get_uncertain_samples_with_vt_status(
+    session: AsyncSession,
+    limit: int = 200,
+) -> list[dict]:
+    """
+    Return uncertain scan_history rows (confidence 0.3–0.7, admin_review=False)
+    with the associated uncertain_sample_queue VT status via LEFT JOIN.
+    """
+    from sqlalchemy import select, and_
+
+    stmt = (
+        select(
+            ScanHistory,
+            UncertainSampleQueue.status.label("vt_status"),
+            UncertainSampleQueue.vt_query_date.label("vt_query_date"),
+            UncertainSampleQueue.id.label("queue_id"),
+        )
+        .outerjoin(
+            UncertainSampleQueue,
+            UncertainSampleQueue.scan_id == ScanHistory.id,
+        )
+        .options(selectinload(ScanHistory.user))
+        .where(
+            and_(
+                ScanHistory.confidence >= 0.3,
+                ScanHistory.confidence <= 0.7,
+                ScanHistory.admin_review == False,  # noqa: E712
+            )
+        )
+        .order_by(ScanHistory.confidence.asc())
+        .limit(limit)
+    )
+
+    result = await session.execute(stmt)
+    rows = result.all()  # list of Row(ScanHistory, vt_status, vt_query_date, queue_id)
+    return rows
+
+
+async def bulk_approve_uncertain_samples(
+    session: AsyncSession,
+    scan_ids: list[int],
+) -> int:
+    """
+    Mark a list of scan_history rows as admin_review=True (approved for retrain).
+    Returns the number of rows updated.
+    """
+    from sqlalchemy import update
+
+    if not scan_ids:
+        return 0
+
+    stmt = (
+        update(ScanHistory)
+        .where(ScanHistory.id.in_(scan_ids))
+        .values(
+            admin_review=True,
+            admin_decision_date=datetime.utcnow(),
+        )
+    )
+    result = await session.execute(stmt)
+    await session.commit()
+    return result.rowcount
+
+
+async def get_approved_for_retrain(session: AsyncSession) -> list[dict]:
+    """
+    Return uncertain_sample_queue entries whose linked scan_history row
+    has admin_review=True, joined with scan metadata.
+    """
+    from sqlalchemy import select
+
+    stmt = (
+        select(
+            UncertainSampleQueue,
+            ScanHistory.file_name.label("sh_file_name"),
+            ScanHistory.confidence.label("sh_confidence"),
+            ScanHistory.is_malicious.label("sh_is_malicious"),
+            ScanHistory.admin_decision_date.label("sh_admin_decision_date"),
+        )
+        .join(ScanHistory, UncertainSampleQueue.scan_id == ScanHistory.id)
+        .where(ScanHistory.admin_review == True)  # noqa: E712
+        .order_by(UncertainSampleQueue.created_at.desc())
+    )
+
+    result = await session.execute(stmt)
+    return result.all()
+
+
+async def get_latest_model_metadata(session: AsyncSession) -> Optional[ModelTrainingHistory]:
+    """Return the most recently trained model row from model_training_history."""
+    from sqlalchemy import select
+
+    stmt = (
+        select(ModelTrainingHistory)
+        .order_by(ModelTrainingHistory.trained_at.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def insert_model_training_record(
+    session: AsyncSession,
+    version: str,
+    model_type: str,
+    accuracy: float,
+    total_samples: int,
+    model_path: Optional[str] = None,
+    dataset: Optional[str] = None,
+    precision: Optional[float] = None,
+    recall: Optional[float] = None,
+    f1_score: Optional[float] = None,
+    fpr: Optional[float] = None,
+    auc: Optional[float] = None,
+    n_features: Optional[int] = None,
+    vocab_size: Optional[int] = None,
+    notes: Optional[str] = None,
+) -> ModelTrainingHistory:
+    """Insert a new model training record after a successful retraining run."""
+    row = ModelTrainingHistory(
+        version=version,
+        model_type=model_type,
+        model_path=model_path,
+        dataset=dataset,
+        accuracy=accuracy,
+        precision=precision,
+        recall=recall,
+        f1_score=f1_score,
+        fpr=fpr,
+        auc=auc,
+        n_features=n_features,
+        vocab_size=vocab_size,
+        total_samples=total_samples,
+        notes=notes,
+        trained_at=datetime.utcnow(),
+    )
+    session.add(row)
+    await session.commit()
+    await session.refresh(row)
+    return row
+
+
+async def flush_uncertain_queue(
+    session: AsyncSession,
+    queue_ids: Optional[list[int]] = None,
+) -> int:
+    """
+    Reset admin_review=False (and admin_decision_date=None) on scan_history rows
+    linked to uncertain_sample_queue entries — does NOT delete queue rows.
+    This allows the admin to re-approve samples without re-scanning.
+
+    Args:
+        session: DB session
+        queue_ids: Specific queue entry IDs to reset. If None/empty, resets ALL.
+
+    Returns:
+        Number of scan_history rows reset.
+    """
+    from sqlalchemy import select, update
+
+    # Find the queue rows to determine which scan_ids to reset
+    if queue_ids:
+        rows_stmt = select(UncertainSampleQueue.scan_id).where(
+            UncertainSampleQueue.id.in_(queue_ids)
+        )
+    else:
+        rows_stmt = select(UncertainSampleQueue.scan_id)
+
+    result = await session.execute(rows_stmt)
+    linked_scan_ids = [r for (r,) in result.all() if r is not None]
+
+    if not linked_scan_ids:
+        return 0
+
+    # Reset admin_review on linked scan_history rows only
+    reset_stmt = (
+        update(ScanHistory)
+        .where(ScanHistory.id.in_(linked_scan_ids))
+        .values(admin_review=False, admin_decision_date=None)
+    )
+    res = await session.execute(reset_stmt)
+    await session.commit()
+    count = res.rowcount
+    logger.info(f"Flushed (reset admin_review) on {count} scan_history rows")
+    return count
+
+
+async def backfill_uncertain_queue_from_history(
+    session: AsyncSession,
+    confidence_low: float = 0.3,
+    confidence_high: float = 0.7,
+) -> int:
+    """
+    Populate uncertain_sample_queue from existing scan_history rows whose
+    confidence falls within [confidence_low, confidence_high] and that are
+    not already present in the queue (matched by scan_id or file_hash).
+
+    Useful for seeding the queue from historical scans for demo/testing.
+    Fields not available in scan_history (features_json, file_storage_path)
+    are filled with safe placeholder values.
+
+    Args:
+        session: DB session
+        confidence_low: Lower bound (inclusive), default 0.3
+        confidence_high: Upper bound (inclusive), default 0.7
+
+    Returns:
+        Number of new queue rows inserted.
+    """
+    from sqlalchemy import select, and_
+
+    # Fetch candidate scan_history rows
+    stmt = (
+        select(ScanHistory)
+        .where(
+            and_(
+                ScanHistory.confidence >= confidence_low,
+                ScanHistory.confidence <= confidence_high,
+                ScanHistory.file_hash.isnot(None),
+            )
+        )
+        .order_by(ScanHistory.timestamp.desc())
+    )
+    result = await session.execute(stmt)
+    candidates = result.scalars().all()
+
+    if not candidates:
+        logger.info("[BACKFILL] No scan_history rows found in confidence range")
+        return 0
+
+    # Fetch existing queue scan_ids and file_hashes to avoid duplicates
+    existing_scan_ids_res = await session.execute(select(UncertainSampleQueue.scan_id))
+    existing_scan_ids = {r for (r,) in existing_scan_ids_res.all() if r is not None}
+
+    existing_hashes_res = await session.execute(select(UncertainSampleQueue.file_hash))
+    existing_hashes = {r for (r,) in existing_hashes_res.all()}
+
+    inserted = 0
+    for sh in candidates:
+        # Skip if already queued by scan_id or file_hash
+        if sh.id in existing_scan_ids or sh.file_hash in existing_hashes:
+            continue
+
+        ml_prediction = 0 if sh.is_malicious else 1
+        # Approximate raw score: confidence toward the predicted class
+        ml_raw_score = sh.confidence if sh.is_malicious else (1.0 - sh.confidence)
+        label = "MALICIOUS" if sh.is_malicious else "CLEAN"
+
+        entry = UncertainSampleQueue(
+            file_hash=sh.file_hash,
+            file_name=sh.file_name,
+            file_path=sh.file_path,
+            file_size=sh.file_size,
+            file_storage_path=sh.file_path,   # placeholder — original path
+            ml_prediction=ml_prediction,
+            ml_confidence=sh.confidence,
+            ml_raw_score=ml_raw_score,
+            prediction_label=label,
+            behavioral_enriched=False,
+            features_json="[]",               # not available from history
+            status="PENDING",
+            scan_id=sh.id,
+        )
+        session.add(entry)
+        existing_hashes.add(sh.file_hash)     # prevent duplicates within this batch
+        existing_scan_ids.add(sh.id)
+        inserted += 1
+
+    if inserted:
+        await session.commit()
+    logger.info(f"[BACKFILL] Inserted {inserted} entries into uncertain_sample_queue")
+    return inserted

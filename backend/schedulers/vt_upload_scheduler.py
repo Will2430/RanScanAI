@@ -16,25 +16,27 @@ from pathlib import Path
 from datetime import datetime
 
 # Add parent directories to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+base_dir = Path(__file__).resolve().parent.parent 
 
-from db_manager import (
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+
+from backend.db_manager import (
     get_session_maker,
     get_pending_vt_uploads,
     update_vt_upload_status,
     update_vt_result,
     increment_vt_attempts
 )
-from vt_integration import VirusTotalEnricher
-from adaptive_learning.feedback_collector import FeedbackCollector
+from backend.vt_integration import VirusTotalEnricher
+from backend.adaptive_learning.feedback_collector import FeedbackCollector
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('adaptive_learning/vt_scheduler.log'),
+        logging.FileHandler(base_dir / "adaptive_learning" / "vt_scheduler.log"),
         logging.StreamHandler()
     ]
 )
@@ -117,10 +119,11 @@ async def run_vt_upload_scheduler():
                     logger.info(f"  ML verdict: {sample.prediction_label} ({sample.ml_confidence:.1%})")
                     
                     # Check if file still exists
-                    file_path = Path(sample.file_storage_path)
+                    file_path = Path(sample.file_path)
                     if not file_path.exists():
                         logger.warning(f"  File not found: {file_path}")
-                        await update_vt_upload_status(db, sample.id, status='FAILED')
+                        logger.warning(f"  Stored path may be stale (different machine or file was deleted)")
+                        await update_vt_upload_status(db, sample.id, status='SKIPPED')
                         stats['not_found'] += 1
                         continue
                     

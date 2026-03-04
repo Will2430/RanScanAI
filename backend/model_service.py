@@ -861,7 +861,7 @@ async def queue_uncertain_sample_with_file(
         session=db,
         file_hash=file_hash,
         file_name=file_name,
-        file_path=file_name,  # Original path not available for uploads
+        file_path=file_storage_path,  # Original path not available for uploads
         file_size=len(file_bytes),
         file_storage_path=str(file_storage_path),
         ml_prediction=ml_prediction,
@@ -1402,8 +1402,8 @@ if __name__ == "__main__":
     
     uvicorn.run(
         "model_service:app",
-        host="127.0.0.1",
-        port=8001,  # Different port from main API
+        host="127.0.0.1",  # Listen on all interfaces (Tailscale + localhost)
+        port=8001,
         reload=False,
         log_level="info"
     )

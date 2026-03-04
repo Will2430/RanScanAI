@@ -133,7 +133,7 @@ const DataTable = ({ data }) => {
                                 <td title={row.username}>{row.username}</td>
                                 <td><span className={`severity-badge ${row.role === 'admin' ? 'high' : 'low'}`}>{row.role}</span></td>
                                 <td><span className={`severity-badge ${getSeverityColor(row.severity)}`}>{row.severity}</span></td>
-                                <td><span className={`status-badge ${row.prediction === 'MALWARE' ? 'status-malware' : 'status-benign'}`}>{row.prediction}</span></td>
+                                <td><span className={`status-badge ${row.prediction === 'MALICIOUS' ? 'status-malware' : 'status-benign'}`}>{row.prediction}</span></td>
                                 <td>{row.confidence}</td>
                                 <td title={row.date}>{row.date}</td>
                             </tr>
