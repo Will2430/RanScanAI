@@ -8,6 +8,7 @@ import AdminRegisterUser from './pages/Adminregisteruser';
 import ManageUsers from './pages/ManageUsers';
 import UncertainSampleDetail from './pages/UncertainSampleDetail';
 import SummaryReportPage from './pages/SummaryReportPage';
+import ViewAllDetectionDetails from './pages/viewalldetectiondetails_page';
 
 const App = () => {
   return (
@@ -21,6 +22,7 @@ const App = () => {
         <Route path="/admin-manage-users" element={<ManageUsers />} />
         <Route path="/admin/uncertain-sample/:detectionId" element={<UncertainSampleDetail />} />
         <Route path="/admin/summary-report/:month" element={<SummaryReportPage />} />
+        <Route path="/detection/:detectionId" element={<ViewAllDetectionDetails />} />
       </Routes>
     </Router>
   );

@@ -3,8 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import './AdminDash.css';
 import DashboardHeader from './components/DashboardHeader';
 import StatCard from './components/StatCard';
+import ScanFile from './components/ScanFile';
 import ChartSection from './components/ChartSection';
 import DataTable from './components/DataTable';
+import UncertainSample from './components/UncertainSample';
+import MonthlySummaryTable from './components/MonthlySummaryTable';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
 
@@ -159,11 +162,14 @@ const AdminDash = () => {
                     </div>
                 ) : (
                     <>
-                        {/* Statistics Cards */}
-                        <div className="stats-grid">
-                            {stats.map((stat, index) => (
-                                <StatCard key={index} {...stat} />
-                            ))}
+                        {/* Statistics Cards + Scan Panel Container */}
+                        <div className="stats-scan-container">
+                            <div className="stats-grid">
+                                {stats.map((stat, index) => (
+                                    <StatCard key={index} {...stat} />
+                                ))}
+                            </div>
+                            <ScanFile />
                         </div>
 
                         {/* Charts Section */}
@@ -175,6 +181,16 @@ const AdminDash = () => {
                         <div className="table-section">
                             <h3>All Detection History</h3>
                             <DataTable data={tableData} />
+                        </div>
+
+                        {/* Uncertain Samples Review */}
+                        <div className="table-section">
+                            <UncertainSample />
+                        </div>
+
+                        {/* Summary Report (All Users Aggregate) */}
+                        <div className="table-section">
+                            <MonthlySummaryTable />
                         </div>
                     </>
                 )}

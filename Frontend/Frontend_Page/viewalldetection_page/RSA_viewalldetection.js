@@ -36,17 +36,13 @@ function renderDetectionRows(rows) {
             <td>${row.file_name}</td>
             <td>${row.display_time}</td>
             <td>
-                <button class="eye-btn" data-id="${row.id}" aria-label="View details for ${row.file_name}" title="View scan details">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                </button>
+                <a class="view-detail-btn" href="/detection/${row.id}" aria-label="View details for ${row.file_name}" title="View incident details">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    <span>View Details</span>
+                </a>
             </td>
         `;
         tbody.appendChild(tr);
-    });
-
-    // Attach click handlers
-    tbody.querySelectorAll('.eye-btn').forEach(btn => {
-        btn.addEventListener('click', () => openDetailModal(parseInt(btn.dataset.id, 10)));
     });
 }
 
@@ -137,83 +133,6 @@ async function fetchDetections() {
     }
 }
 
-// ── Detail Modal ───────────────────────────────────────────────
-
-function formatFileSize(bytes) {
-    if (bytes == null) return '—';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / 1048576).toFixed(2) + ' MB';
-}
-
-async function openDetailModal(detectionId) {
-    const modal = document.getElementById('detail-modal');
-    const body  = document.getElementById('modal-body');
-
-    // Show loading state
-    body.innerHTML = `<div class="modal-loading">Loading…</div>`;
-    modal.classList.add('active');
-
-    try {
-        const res = await fetch(`${API_BASE_URL}/api/detections/${detectionId}`, { headers: authHeaders() });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const d = await res.json();
-
-        const outputLabel = d.is_malicious ? 'Malicious' : 'Benign';
-        const outputClass = d.is_malicious ? 'detail-malicious' : 'detail-benign';
-        const confidencePct = (d.confidence * 100).toFixed(1);
-
-        body.innerHTML = `
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <span class="detail-label">File Name</span>
-                    <span class="detail-value mono">${d.file_name || '—'}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">File Path</span>
-                    <span class="detail-value mono">${d.file_path || '—'}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">File Size</span>
-                    <span class="detail-value">${formatFileSize(d.file_size)}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Output</span>
-                    <span class="detail-value ${outputClass}">${outputLabel}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Prediction Label</span>
-                    <span class="detail-value ${outputClass}">${d.prediction_label || '—'}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Model Type</span>
-                    <span class="detail-value">${d.model_type || '—'}</span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Confidence</span>
-                    <span class="detail-value">
-                        <span class="confidence-bar-wrap">
-                            <span class="confidence-bar" style="width:${confidencePct}%;background:${d.is_malicious ? '#DC2626' : '#16A34A'}"></span>
-                        </span>
-                        ${confidencePct}%
-                    </span>
-                </div>
-                <div class="detail-item">
-                    <span class="detail-label">Completion Time</span>
-                    <span class="detail-value">${d.scan_time_ms != null ? d.scan_time_ms + ' ms' : '—'}</span>
-                </div>
-            </div>
-        `;
-    } catch (err) {
-        console.error('Failed to load detection detail:', err);
-        body.innerHTML = `<div class="modal-error">Failed to load details. Please try again.</div>`;
-    }
-}
-
-function closeDetailModal() {
-    document.getElementById('detail-modal').classList.remove('active');
-}
-
 // ── Initialise ─────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -226,14 +145,5 @@ document.addEventListener('DOMContentLoaded', () => {
             event.preventDefault();
             toggleDateSort();
         }
-    });
-
-    // Modal close handlers
-    document.getElementById('modal-close').addEventListener('click', closeDetailModal);
-    document.getElementById('detail-modal').addEventListener('click', (e) => {
-        if (e.target === e.currentTarget) closeDetailModal();
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeDetailModal();
     });
 });
