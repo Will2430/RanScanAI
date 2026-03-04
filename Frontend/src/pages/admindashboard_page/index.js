@@ -7,7 +7,7 @@ import ScanFile from './components/ScanFile';
 import ChartSection from './components/ChartSection';
 import DataTable from './components/DataTable';
 import UncertainSample from './components/UncertainSample';
-import MonthlyUserReport from './components/MonthlyUserReport';
+import MonthlySummaryTable from './components/MonthlySummaryTable';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
 
@@ -188,9 +188,9 @@ const AdminDash = () => {
                             <UncertainSample />
                         </div>
 
-                        {/* Monthly User Report */}
+                        {/* Summary Report (All Users Aggregate) */}
                         <div className="table-section">
-                            <MonthlyUserReport />
+                            <MonthlySummaryTable />
                         </div>
                     </>
                 )}

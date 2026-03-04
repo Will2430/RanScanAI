@@ -4,6 +4,10 @@ const ROWS_PER_PAGE = 10;
 
 const DataTable = ({ data }) => {
     const [currentPage, setCurrentPage] = useState(1);
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [filenameSearch, setFilenameSearch] = useState('');
+    const [severitySort, setSeveritySort] = useState(null); // 'asc' or 'desc'
 
     const getSeverityColor = (severity) => {
         switch(severity) {
@@ -14,6 +18,31 @@ const DataTable = ({ data }) => {
         }
     };
 
+    const severityOrder = { 'CRITICAL': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+
+    const filteredData = data.filter((row) => {
+        if (dateFrom || dateTo) {
+            const rowDate = new Date(row.date);
+            if (dateFrom && rowDate < new Date(dateFrom)) return false;
+            if (dateTo) {
+                const endDate = new Date(dateTo);
+                endDate.setHours(23, 59, 59, 999);
+                if (rowDate > endDate) return false;
+            }
+        }
+        if (filenameSearch && !row.file_name.toLowerCase().includes(filenameSearch.toLowerCase())) {
+            return false;
+        }
+        return true;
+    }).sort((a, b) => {
+        if (severitySort) {
+            const aValue = severityOrder[a.severity] || 0;
+            const bValue = severityOrder[b.severity] || 0;
+            return severitySort === 'asc' ? aValue - bValue : bValue - aValue;
+        }
+        return 0;
+    });
+
     if (!data || data.length === 0) {
         return (
             <div className="table-wrapper" style={{ textAlign: 'center', padding: '40px', color: '#888' }}>
@@ -22,9 +51,9 @@ const DataTable = ({ data }) => {
         );
     }
 
-    const totalPages = Math.ceil(data.length / ROWS_PER_PAGE);
+    const totalPages = Math.ceil(filteredData.length / ROWS_PER_PAGE);
     const startIdx = (currentPage - 1) * ROWS_PER_PAGE;
-    const pageData = data.slice(startIdx, startIdx + ROWS_PER_PAGE);
+    const pageData = filteredData.slice(startIdx, startIdx + ROWS_PER_PAGE);
 
     const goToPage = (page) => {
         if (page >= 1 && page <= totalPages) setCurrentPage(page);
@@ -42,6 +71,44 @@ const DataTable = ({ data }) => {
 
     return (
         <div>
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', alignItems: 'flex-end' }}>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '4px', color: '#555' }}>From Date:</label>
+                    <input 
+                        type="date" 
+                        value={dateFrom} 
+                        onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                        style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.9rem' }}
+                    />
+                </div>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '4px', color: '#555' }}>To Date:</label>
+                    <input 
+                        type="date" 
+                        value={dateTo} 
+                        onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                        style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.9rem' }}
+                    />
+                </div>
+                <div>
+                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '4px', color: '#555' }}>File Name:</label>
+                    <input 
+                        type="text" 
+                        placeholder="Search..."
+                        value={filenameSearch} 
+                        onChange={(e) => { setFilenameSearch(e.target.value); setCurrentPage(1); }}
+                        style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '0.9rem', width: '150px' }}
+                    />
+                </div>
+                {(dateFrom || dateTo || filenameSearch) && (
+                    <button 
+                        onClick={() => { setDateFrom(''); setDateTo(''); setFilenameSearch(''); setCurrentPage(1); }}
+                        style={{ padding: '6px 12px', borderRadius: '4px', border: 'none', backgroundColor: '#f0f0f0', cursor: 'pointer', fontSize: '0.9rem' }}
+                    >
+                        Clear All
+                    </button>
+                )}
+            </div>
             <div className="table-wrapper">
                 <table className="data-table">
                     <thead>
@@ -50,7 +117,9 @@ const DataTable = ({ data }) => {
                             <th>File Name</th>
                             <th>Username</th>
                             <th>Role</th>
-                            <th>Severity</th>
+                            <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => setSeveritySort(severitySort === 'desc' ? 'asc' : 'desc')}>
+                                Severity {severitySort === 'desc' ? '↓' : severitySort === 'asc' ? '↑' : '—'}
+                            </th>
                             <th>Prediction</th>
                             <th>Confidence</th>
                             <th>Date &amp; Time</th>
@@ -79,7 +148,7 @@ const DataTable = ({ data }) => {
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                     padding: '16px 0 4px', fontSize: '0.9rem', color: '#555'
                 }}>
-                    <span>Showing {startIdx + 1}–{Math.min(startIdx + ROWS_PER_PAGE, data.length)} of {data.length} records</span>
+                    <span>Showing {startIdx + 1}–{Math.min(startIdx + ROWS_PER_PAGE, filteredData.length)} of {filteredData.length} records</span>
                     <div style={{ display: 'flex', gap: '4px' }}>
                         <button onClick={() => goToPage(1)} disabled={currentPage === 1}
                             className="page-btn" title="First page">«</button>
