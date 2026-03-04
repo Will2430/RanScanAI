@@ -74,14 +74,7 @@
 .vad-logo {
     display: flex;
     align-items: center;
-    gap: 10px;
     text-decoration: none;
-}
-
-.vad-logo-img {
-    width: 34px;
-    height: 34px;
-    object-fit: contain;
 }
 
 .vad-logo-text {
@@ -89,11 +82,14 @@
     font-weight: 800;
     letter-spacing: -0.02em;
     line-height: 1;
+    background: #1a1a1a;
+    padding: 8px 14px 6px;
+    border-radius: 4px;
 }
 
-.vad-logo-ran { color: var(--vad-brand-red); }
-.vad-logo-scan { color: #ffffff; }
-.vad-logo-ai { color: #8B9FE8; }
+.vad-logo-ran { color: #CC3333; }
+.vad-logo-scan { color: #9CA3AF; }
+.vad-logo-ai { color: #9CA3AF; }
 
 .vad-header-divider {
     width: 1px;

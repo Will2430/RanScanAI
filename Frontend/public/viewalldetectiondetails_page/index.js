@@ -154,7 +154,6 @@ const ViewAllDetectionDetails = () => {
             <header className="vad-header">
                 <div className="vad-header-left">
                     <a className="vad-logo" href="/userdashboard_page/RSA_userdashboard.html" aria-label="Go to dashboard">
-                        <img src="/userdashboard_page/RSA_logo.png" alt="RanScanAI logo" className="vad-logo-img" />
                         <span className="vad-logo-text">
                             <span className="vad-logo-ran">Ran</span>
                             <span className="vad-logo-scan">Scan</span>
@@ -278,14 +277,7 @@ const ViewAllDetectionDetails = () => {
                                         <span className="vad-info-label">Model</span>
                                         <span className="vad-info-value">{detection.model_type || '—'}</span>
                                     </div>
-                                    <div className="vad-info-row">
-                                        <span className="vad-info-label">Features Analyzed</span>
-                                        <span className="vad-info-value">
-                                            {detection.features_analyzed != null
-                                                ? detection.features_analyzed.toLocaleString()
-                                                : '—'}
-                                        </span>
-                                    </div>
+
                                 </div>
                             </section>
 

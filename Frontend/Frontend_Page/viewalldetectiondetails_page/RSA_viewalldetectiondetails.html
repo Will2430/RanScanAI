@@ -3,11 +3,11 @@
 <head>
 	<meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>RanScanAI - Detection Details</title>
+	<title>RanScanAI - Incident Details</title>
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-	<link rel="stylesheet" href="RSA_viewlatestdetectiondetails.css" />
+	<link rel="stylesheet" href="RSA_viewalldetectiondetails.css" />
 </head>
 <body>
     <!-- Header -->
@@ -32,9 +32,9 @@
 
 	<main class="page-wrap">
         <div class="page-title">
-            <a class="back-link" href="../userdashboard_page/RSA_userdashboard.html" aria-label="Back to dashboard">
+            <a class="back-link" href="../viewalldetection_page/RSA_viewalldetection.html" aria-label="Back to all detections">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                <span>Back to Dashboard</span>
+                <span>Back to All Detections</span>
             </a>
             <h1>Incident Details</h1>
 		</div>
@@ -44,7 +44,7 @@
             <section class="details-card summary-card">
                 <div class="card-header"><h2>Loading...</h2></div>
                 <div class="summary-content">
-                    <p style="color:#5B6380;">Fetching latest detection data...</p>
+                    <p style="color:#5B6380;">Fetching detection data...</p>
                 </div>
             </section>
         </div>
@@ -58,8 +58,8 @@
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#5B6380" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                     </div>
                     <div class="summary-info">
-                        <h3 class="threat-name" id="error-message">No detections available</h3>
-                        <p class="threat-type">Scan a file to see detection details here.</p>
+                        <h3 class="threat-name" id="error-message">Detection not found</h3>
+                        <p class="threat-type">The requested detection could not be loaded.</p>
                     </div>
                 </div>
             </section>
@@ -104,7 +104,6 @@
                         <span class="info-label">Model</span>
                         <span class="info-value" id="detection-model">—</span>
                     </div>
-
                 </div>
             </section>
 
@@ -130,7 +129,7 @@
                     </div>
                 </div>
             </section>
-            
+
             <!-- Action Card -->
             <section class="details-card action-card">
                 <h2>Recommended Actions</h2>
@@ -145,7 +144,7 @@
 
     <script>
     // ============================================================
-    // Fetch & render the latest detection for the logged-in user
+    // Fetch & render detection detail by ID from URL query param
     // ============================================================
     (function () {
         const API_BASE = 'http://127.0.0.1:8000';
@@ -165,67 +164,43 @@
         const errorEl    = document.getElementById('error-state');
         const contentEl  = document.getElementById('detection-content');
 
-        // Show loading
-        loadingEl.style.display = '';
-
-        // Check if a specific detection ID was passed via URL query param
+        // Get detection ID from URL
         const urlParams = new URLSearchParams(window.location.search);
         const detectionId = urlParams.get('id');
 
+        if (!detectionId) {
+            document.getElementById('error-message').textContent = 'No detection ID specified';
+            errorEl.style.display = '';
+            return;
+        }
+
+        // Show loading
+        loadingEl.style.display = '';
+
         async function fetchDetection() {
             try {
-                let data;
+                const res = await fetch(`${API_BASE}/api/detections/${detectionId}`, { headers: authHeaders() });
 
-                if (detectionId) {
-                    // Fetch specific detection by ID
-                    const res = await fetch(`${API_BASE}/api/detections/${detectionId}`, { headers: authHeaders() });
-                    if (!res.ok) {
-                        if (res.status === 401) { clearAuthAndRedirect(); return; }
-                        throw new Error(res.status === 404 ? 'Detection not found' : 'Failed to fetch detection');
+                if (!res.ok) {
+                    if (res.status === 401) {
+                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('user_data');
+                        window.location.href = '/login';
+                        return;
                     }
-                    data = await res.json();
-                } else {
-                    // Try the /user/latest endpoint first
-                    let res = await fetch(`${API_BASE}/api/detections/user/latest`, { headers: authHeaders() });
-                    
-                    if (res.status === 404 || res.status === 405) {
-                        // Fallback: fetch latest via list endpoint
-                        res = await fetch(`${API_BASE}/api/detections?limit=1`, { headers: authHeaders() });
-                        if (!res.ok) {
-                            if (res.status === 401) { clearAuthAndRedirect(); return; }
-                            throw new Error('Failed to fetch detections');
-                        }
-                        const listData = await res.json();
-                        if (!listData.detections || listData.detections.length === 0) {
-                            throw new Error('No detections found');
-                        }
-                        const latestId = listData.detections[0].id;
-                        // Get full details for this detection
-                        const detailRes = await fetch(`${API_BASE}/api/detections/${latestId}`, { headers: authHeaders() });
-                        if (!detailRes.ok) throw new Error('Failed to fetch detection details');
-                        data = await detailRes.json();
-                    } else if (!res.ok) {
-                        if (res.status === 401) { clearAuthAndRedirect(); return; }
-                        throw new Error('Failed to fetch latest detection');
-                    } else {
-                        data = await res.json();
-                    }
+                    throw new Error(res.status === 404 ? 'Detection not found' : 'Failed to fetch detection');
                 }
 
+                const data = await res.json();
                 loadingEl.style.display = 'none';
                 renderDetection(data);
                 contentEl.style.display = '';
+
             } catch (err) {
                 loadingEl.style.display = 'none';
-                document.getElementById('error-message').textContent = err.message || 'No detections available';
+                document.getElementById('error-message').textContent = err.message || 'Detection not found';
                 errorEl.style.display = '';
             }
-        }
-
-        function clearAuthAndRedirect() {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('user_data');
-            window.location.href = '/login';
         }
 
         fetchDetection();
@@ -276,7 +251,6 @@
             // Parse date/time from display_time or timestamp
             if (d.display_time) {
                 const parts = d.display_time.split(' ');
-                // display_time format: "22 February 2026 18:24:05"
                 if (parts.length >= 4) {
                     document.getElementById('detection-date').textContent = parts[0] + ' ' + parts[1] + ' ' + parts[2];
                     document.getElementById('detection-time').textContent = parts[3];
@@ -304,6 +278,7 @@
             // --- File details ---
             document.getElementById('file-path').textContent = d.file_path || '—';
             document.getElementById('file-size').textContent = d.file_size ? formatFileSize(d.file_size) : '—';
+
             // Only show SHA-256 for malicious files
             const hashRow = document.getElementById('hash-row');
             if (d.is_malicious && d.file_hash) {

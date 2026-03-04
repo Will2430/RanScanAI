@@ -85,14 +85,6 @@ class ChangePasswordRequest(BaseModel):
     old_password: str = Field(..., description="Current password for verification")
     new_password: str = Field(..., min_length=8, description="New password (min 8 characters)")
 
-    @field_validator('new_password')
-    @classmethod
-    def validate_new_password(cls, v, info):
-        """Ensure new password is different from old password"""
-        if 'old_password' in info.data and v == info.data['old_password']:
-            raise ValueError('New password must be different from old password')
-        return v
-
     class Config:
         json_schema_extra = {
             "example": {

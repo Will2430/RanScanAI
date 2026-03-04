@@ -92,14 +92,7 @@ body {
 .logo {
     display: flex;
     align-items: center;
-    gap: 10px;
     text-decoration: none;
-}
-
-.logo-img {
-    width: 34px;
-    height: 34px;
-    object-fit: contain;
 }
 
 .logo-text {
@@ -107,12 +100,15 @@ body {
     font-weight: 800;
     letter-spacing: -0.02em;
     line-height: 1;
+    background: #1a1a1a;
+    padding: 8px 14px 6px;
+    border-radius: 4px;
 }
 
-.logo-ran { color: var(--brand-red); }
-.logo-scan { color: #ffffff; }
-.logo-scan-dark { color: var(--text-primary); }
-.logo-ai { color: #8B9FE8; }
+.logo-ran { color: #CC3333; }
+.logo-scan { color: #9CA3AF; }
+.logo-scan-dark { color: #9CA3AF; }
+.logo-ai { color: #9CA3AF; }
 
 .header-divider {
     width: 1px;
@@ -270,16 +266,14 @@ body {
     gap: 12px;
 }
 
-.report-brand-logo {
-    width: 40px;
-    height: 40px;
-    object-fit: contain;
-}
-
 .report-brand-text {
     font-size: 1.4rem;
     font-weight: 800;
     letter-spacing: -0.02em;
+    background: #1a1a1a;
+    padding: 8px 14px 6px;
+    border-radius: 4px;
+    display: inline-block;
 }
 
 .report-brand-sub {
