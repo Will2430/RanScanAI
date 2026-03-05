@@ -673,14 +673,178 @@ def extract_windows(sequence, stride=500):
     return windows
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Model loading helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def _get_active_paths_from_db() -> dict:
+    """
+    Query model_training_history for the currently active CNN and XGBoost rows.
+
+    Returns:
+        {"cnn_path": str|None, "xgb_path": str|None,
+         "cnn_version": str|None, "xgb_version": str|None}
+    """
+    if not DB_AVAILABLE:
+        return {"cnn_path": None, "xgb_path": None, "cnn_version": None, "xgb_version": None}
+    try:
+        from db_manager import get_active_models, get_session_maker
+        SessionLocal = get_session_maker()
+        async with SessionLocal() as session:
+            active = await get_active_models(session)
+        cnn_row = active.get("cnn")
+        xgb_row = active.get("xgboost")
+        return {
+            "cnn_path":    cnn_row.model_path if cnn_row else None,
+            "cnn_version": cnn_row.version    if cnn_row else None,
+            "xgb_path":    xgb_row.model_path if xgb_row else None,
+            "xgb_version": xgb_row.version    if xgb_row else None,
+        }
+    except Exception as exc:
+        logger.warning(f"[model_service] Could not fetch active models from DB: {exc}")
+        return {"cnn_path": None, "xgb_path": None, "cnn_version": None, "xgb_version": None}
+
+
+async def _load_active_models():
+    """
+    Load (or reload) the XGBoost and CNN models.
+
+    Priority order for each model family:
+    1. DB-active row with a valid model_path that exists on disk.
+    2. Latest file by mtime in models/ (original fallback behaviour).
+
+    Mutates the module-level globals: model, scaler, model_feature_names,
+    model_metadata, cnn_model, vocab, cnn_metadata.
+    """
+    global model, scaler, model_metadata, model_feature_names
+    global cnn_model, cnn_metadata, vocab
+
+    BASE_DIR   = Path(__file__).resolve().parent.parent
+    models_dir = BASE_DIR / "models"
+
+    db_paths = await _get_active_paths_from_db()
+
+    # ── XGBoost ──────────────────────────────────────────────────────────────
+    xgb_pkl: Path | None = None
+    if db_paths["xgb_path"]:
+        candidate = Path(db_paths["xgb_path"])
+        if not candidate.is_absolute():
+            candidate = BASE_DIR / candidate
+        if candidate.exists():
+            xgb_pkl = candidate
+            logger.info(f"[model_service] Loading DB-active XGBoost: {xgb_pkl.name} (v{db_paths['xgb_version']})")
+        else:
+            logger.warning(f"[model_service] DB-active XGBoost path missing on disk: {candidate}")
+
+    if xgb_pkl is None:
+        candidates = sorted(models_dir.glob("xgboost_zenodo_*.pkl"), key=lambda p: p.stat().st_mtime)
+        if candidates:
+            xgb_pkl = candidates[-1]
+            logger.info(f"[model_service] Falling back to latest XGBoost by mtime: {xgb_pkl.name}")
+
+    if xgb_pkl:
+        ts_parts = xgb_pkl.stem.split("_")
+        timestamp = ts_parts[-2] + "_" + ts_parts[-1]
+        model = joblib.load(str(xgb_pkl))
+        logger.info(f"✓ XGBoost model loaded — type={type(model).__name__}")
+
+        scaler_path = models_dir / f"scaler_xgb_{timestamp}.pkl"
+        if scaler_path.exists():
+            scaler = joblib.load(scaler_path)
+            logger.info(f"✓ Scaler loaded ({scaler.n_features_in_} features)")
+
+        features_path = models_dir / f"features_xgb_{timestamp}.json"
+        if features_path.exists():
+            with open(features_path) as f:
+                model_feature_names = json.load(f)
+
+        metadata_path = models_dir / f"xgboost_metadata_{timestamp}.json"
+        if metadata_path.exists():
+            with open(metadata_path) as f:
+                model_metadata = json.load(f)
+            logger.info(f"✓ XGBoost metadata loaded (acc={model_metadata.get('performance',{}).get('accuracy','?')})")
+    else:
+        logger.warning("[model_service] No XGBoost model found — running in signature-only mode")
+
+    # ── PE extractor / VT (tied to XGBoost, initialise once) ─────────────────
+    global pe_extractor, vt_enricher
+    if PE_AVAILABLE and pe_extractor is None:
+        pe_extractor = PEFeatureExtractor()
+        logger.info(f"✓ PE feature extractor initialised ({pe_extractor.n_features} features)")
+        try:
+            vt_enricher = VirusTotalEnricher()
+            logger.info("✓ VirusTotal enricher initialised")
+        except Exception as e:
+            logger.warning(f"VT enricher not available: {e}")
+
+    # ── 1D CNN ────────────────────────────────────────────────────────────────
+    try:
+        try:
+            from tensorflow import keras as _keras
+        except ImportError:
+            logger.warning("⚠️  TensorFlow not available — Stage 2 (CNN) will be unavailable")
+            return
+
+        cnn_keras: Path | None = None
+        if db_paths["cnn_path"]:
+            candidate = Path(db_paths["cnn_path"])
+            if not candidate.is_absolute():
+                candidate = BASE_DIR / candidate
+            if candidate.exists():
+                cnn_keras = candidate
+                logger.info(f"[model_service] Loading DB-active CNN: {cnn_keras.name} (v{db_paths['cnn_version']})")
+            else:
+                logger.warning(f"[model_service] DB-active CNN path missing on disk: {candidate}")
+
+        if cnn_keras is None:
+            # Fall back to latest .keras file by mtime
+            cnn_files = sorted(models_dir.glob("best_fixed_cnn_*.keras"), key=lambda p: p.stat().st_mtime)
+            if cnn_files:
+                cnn_keras = cnn_files[-1]
+                logger.info(f"[model_service] Falling back to latest CNN by mtime: {cnn_keras.name}")
+
+        if cnn_keras is None:
+            logger.warning("⚠️  No CNN model found — Stage 2 will be unavailable")
+            return
+
+        cnn_ts_parts = cnn_keras.stem.split("_")
+        cnn_timestamp = cnn_ts_parts[-2] + "_" + cnn_ts_parts[-1]
+
+        cnn_model = _keras.models.load_model(str(cnn_keras), compile=False)
+        logger.info(f"✓ CNN model loaded — params={cnn_model.count_params():,}")
+
+        # Vocabulary
+        vocab_files = sorted(models_dir.glob(f"api_vocab_fixed_{cnn_timestamp}.pkl"), key=lambda p: p.stat().st_mtime)
+        if vocab_files:
+            vocab_path = vocab_files[-1]
+        else:
+            vocab_path = models_dir / "api_vocab_fixed.pkl"
+
+        with open(vocab_path, "rb") as f:
+            vocab = pickle.load(f)
+        logger.info(f"✓ CNN vocabulary loaded ({len(vocab)} tokens) from {vocab_path.name}")
+
+        cnn_meta_files = sorted(models_dir.glob(f"cnn_fixed_metadata_{cnn_timestamp}.json"))
+        if cnn_meta_files:
+            with open(cnn_meta_files[0]) as f:
+                cnn_metadata = json.load(f)
+            logger.info(f"✓ CNN metadata loaded (acc={cnn_metadata.get('accuracy','?')})")
+
+        logger.info("✓ Stage 2 (CNN sequential analysis) available")
+
+    except Exception as exc:
+        logger.warning(f"Failed to load CNN model: {exc}")
+        logger.info("  Stage 2 (sequential analysis) will be unavailable")
+
+
 @app.on_event("startup")
 async def startup_event():
     """Load model and scaler on startup"""
     global model, scaler, model_metadata, pe_extractor, vt_enricher, model_feature_names
     global cnn_model, cnn_scaler, cnn_metadata, vocab  # CNN model globals + vocabulary
-    
+
     logger.info("🚀 Starting Gradient Boosting Model Service...")
-    
+
     # Initialize database connection
     if DB_AVAILABLE:
         try:
@@ -690,122 +854,27 @@ async def startup_event():
         except Exception as e:
             logger.warning(f"Database initialization failed: {e}")
             logger.warning("⚠️  Continuing without database logging...")
-    
+
+    await _load_active_models()
+    logger.info("✅ Model Scanning Service ready!")
+
+
+@app.post("/reload-model")
+async def reload_model():
+    """
+    Internal endpoint — reload whichever CNN and XGBoost versions are currently
+    marked active in model_training_history.  Called by main.py after an admin
+    changes the active version via POST /api/models/set-active.
+
+    No authentication is enforced here because this endpoint is only reachable
+    on localhost (port 8001) behind main.py which already enforces admin auth.
+    """
     try:
-        # Find the latest model file
-        BASE_DIR = Path(__file__).resolve().parent.parent  # adjust as needed
-        models_dir = BASE_DIR / "models"
-        
-        # Look for Gradient Boosting .pkl files
-        model_files = list(models_dir.glob("xgboost_zenodo_*.pkl"))
-        
-        if not model_files:
-            logger.warning("No trained model found - service will run in signature-only mode")
-            return
-        
-        # Use the latest model
-        latest_model = max(model_files, key=lambda p: p.stat().st_mtime)
-        timestamp = latest_model.stem.split('_')[-2] + '_' + latest_model.stem.split('_')[-1]
-
-        logger.info(f"Loading XGBoost model from {latest_model.name}")
-        model = joblib.load(str(latest_model))
-        logger.info(f"✓ Model loaded successfully")
-        logger.info(f"  Model type: {type(model).__name__}")
-        logger.info(f"  N estimators: {model.n_estimators}")
-        
-        # Load corresponding scaler
-        scaler_path = models_dir / f"scaler_xgb_{timestamp}.pkl"
-        if scaler_path.exists():
-            scaler = joblib.load(scaler_path)
-            logger.info(f"✓ Scaler loaded from {scaler_path.name}")
-            logger.info(f"  Features in scaler: {scaler.n_features_in_}")
-        else:
-            logger.warning("⚠️  Scaler not found - predictions may be inaccurate")
-        
-        # Load feature names
-        features_path = models_dir / f"features_xgb_{timestamp}.json"
-        if features_path.exists():
-            with open(features_path) as f:
-                model_feature_names = json.load(f)
-            logger.info(f"✓ Feature names loaded: {len(model_feature_names)} features")
-        else:
-            logger.warning("⚠️  Feature names not found")
-        
-        # Load metadata
-        metadata_path = models_dir / f"xgboost_metadata_{timestamp}.json"
-        if metadata_path.exists():
-            with open(metadata_path) as f:
-                model_metadata = json.load(f)
-            logger.info(f"✓ Model metadata loaded")
-            logger.info(f"  Accuracy: {model_metadata.get('performance', {}).get('accuracy', 'N/A')}")
-            logger.info(f"  AUC: {model_metadata.get('performance', {}).get('roc_auc', 'N/A')}")
-            logger.info(f"  Model trained with {len(model_metadata.get('feature_names', []))} clean features")
-        else:
-            logger.warning("⚠️  Metadata not found")
-        
-        # Initialize PE feature extractor
-        if PE_AVAILABLE:
-            pe_extractor = PEFeatureExtractor()
-            logger.info(f"✓ PE feature extractor initialized ({pe_extractor.n_features} features)")
-            
-            # Try to initialize VT enricher (optional)
-            try:
-                vt_enricher = VirusTotalEnricher()
-                logger.info(f"✓ VirusTotal enricher initialized")
-            except Exception as e:
-                logger.warning(f"VT enricher not available: {e}")
-                logger.info("  Service will run without VT enrichment")
-        else:
-            logger.warning("PE feature extraction not available - using legacy byte mode")
-        
-        # Load 1D CNN model for Stage 2 (sequential API analysis)
-        try:
-            # Check if TensorFlow/Keras is available
-            try:
-                from tensorflow import keras
-                logger.info("Checking for CNN model...")
-            except ImportError:
-                logger.warning("⚠️  TensorFlow not available - Stage 2 (CNN) will be unavailable")
-                raise
-            
-            cnn_files = list(models_dir.glob("best_fixed_cnn_*.keras"))
-            if cnn_files:
-                latest_cnn = max(cnn_files, key=lambda p: p.stat().st_mtime)
-                cnn_timestamp = latest_cnn.stem.split('_')[-2] + '_' + latest_cnn.stem.split('_')[-1]
-                
-                logger.info(f"Loading 1D CNN model from {latest_cnn.name}")
-                cnn_model = keras.models.load_model(str(latest_cnn), compile=False)
-                logger.info(f"✓ CNN model loaded successfully")
-                logger.info(f"  Model type: {type(cnn_model).__name__}")
-                logger.info(f"  Input shape: {cnn_model.input_shape}")
-                logger.info(f"  Output shape: {cnn_model.output_shape}")
-                logger.info(f"  Parameters: {cnn_model.count_params():,}")
-                
-                # Find latest timestamped vocab, fall back to fixed name
-                vocab_files = list(models_dir.glob("api_vocab_fixed_*.pkl"))
-                if vocab_files:
-                    vocab_path = max(vocab_files, key=lambda p: p.stat().st_mtime)
-                else:
-                    vocab_path = models_dir / "api_vocab_fixed.pkl"  # legacy fallback
-                # Load vocabulary
-                with open(vocab_path, 'rb') as f:
-                    vocab = pickle.load(f)
-                logger.info(f"✓ Vocabulary loaded from {vocab_path.name}")
-                logger.info(f"  Vocabulary size: {len(vocab)}")
-
-                logger.info("✓ Stage 2 (CNN sequential analysis) available")
-            else:
-                logger.warning("⚠️  No CNN model found - Stage 2 will be unavailable")
-                logger.info("  System will use XGBoost-only analysis")
-        except Exception as e:
-            logger.warning(f"Failed to load CNN model: {e}")
-            logger.info("  Stage 2 (sequential analysis) will be unavailable")
-        
-        logger.info("✅ Model Scanning Service ready!")
-        
-    except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        logger.warning("Service will run in signature-only mode")
+        await _load_active_models()
+        return {"status": "ok", "message": "Models reloaded from active DB selection"}
+    except Exception as exc:
+        logger.error(f"[reload-model] Failed: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 
@@ -818,20 +887,14 @@ async def queue_uncertain_sample_with_file(
     behavioral_enriched: bool,
     behavioral_source: Optional[str],
     scan_id: Optional[int] = None,
+    complete_data: Optional[dict] = None,
 ):
     """
     Queue uncertain sample and store file copy for later VT upload
-    
+
     Creates persistent copy at: adaptive_learning/queued_files/{hash}.bin
-    
-    Args:
-        db: Database session
-        file_bytes: Raw file bytes
-        file_name: Original filename
-        features: Feature vector (after enrichment)
-        prediction_prob: Raw probability of malicious class
-        behavioral_enriched: Whether behavioral features were added
-        behavioral_source: Source of behavioral data
+    If complete_data is supplied the raw API call sequence is also persisted
+    so the CNN model can use it for retraining.
     """
     # Calculate file hash
     file_hash = hashlib.sha256(file_bytes).hexdigest()
@@ -849,7 +912,21 @@ async def queue_uncertain_sample_with_file(
     
     # Serialize features
     features_json = json.dumps(features.tolist())
-    
+
+    # Extract raw API call sequence from complete_analysis if available
+    api_sequence_json = None
+    if complete_data:
+        raw_seq = complete_data.get("api_sequence", [])
+        api_calls: list[str] = []
+        for call in raw_seq:
+            if isinstance(call, dict):
+                api_calls.append(call.get("api", ""))
+            elif isinstance(call, str):
+                api_calls.append(call)
+        if api_calls:
+            api_sequence_json = json.dumps(api_calls)
+            logger.debug(f"API sequence captured: {len(api_calls)} calls")
+
     # Calculate prediction values
     ml_prediction = int(prediction_prob >= 0.5)  # 0=malicious, 1=benign
     ml_confidence = prediction_prob if prediction_prob >= 0.5 else (1 - prediction_prob)
@@ -861,7 +938,7 @@ async def queue_uncertain_sample_with_file(
         session=db,
         file_hash=file_hash,
         file_name=file_name,
-        file_path=file_storage_path,  # Original path not available for uploads
+        file_path=file_name,  # Original path not available for uploads
         file_size=len(file_bytes),
         file_storage_path=str(file_storage_path),
         ml_prediction=ml_prediction,
@@ -872,6 +949,7 @@ async def queue_uncertain_sample_with_file(
         behavioral_enriched=behavioral_enriched,
         behavioral_source=behavioral_source,
         scan_id=scan_id,
+        api_sequence_json=api_sequence_json,
     )
     
     logger.info(f"📋 Queued sample for VT upload: {file_hash[:8]}... (confidence: {ml_confidence:.2%})")
@@ -1317,6 +1395,7 @@ async def predict_staged(
                             behavioral_enriched=True,
                             behavioral_source="vm_complete_analyzer",
                             scan_id=scan_id,
+                            complete_data=complete_data,
                         )
                         logger.info(f"📋 Sample queued for VT verification (confidence: {final_confidence:.2%})")
                     except Exception as _qe:

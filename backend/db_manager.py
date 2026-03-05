@@ -193,7 +193,9 @@ class UncertainSampleQueue(Base):
     
     # Features (serialized JSON for retraining)
     features_json: Mapped[str] = mapped_column(Text)  # Serialized feature vector
-    
+    # Raw API call sequence captured from vm_complete_analyzer (for CNN retraining)
+    api_sequence_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # VT tracking
     vt_queried: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     vt_query_date: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -203,6 +205,11 @@ class UncertainSampleQueue(Base):
     
     # Status: PENDING, UPLOADING, SCANNING, VALIDATED, FAILED
     status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
+
+    # Admin-assigned ground-truth label (set when admin reviews via ✓ Safe / ✗ Malware
+    # or via bulk-approve).  Uses training convention: 0=benign, 1=malicious.
+    # NULL means no label has been assigned yet — export will skip this entry.
+    admin_label: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # FK to parent scan
     scan_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("scan_history.id", ondelete="SET NULL"), nullable=True, index=True)
@@ -360,13 +367,21 @@ class ModelTrainingHistory(Base):
     precision: Mapped[Optional[float]] = mapped_column(nullable=True)
     recall: Mapped[Optional[float]] = mapped_column(nullable=True)
     f1_score: Mapped[Optional[float]] = mapped_column(nullable=True)
-    fpr: Mapped[Optional[float]] = mapped_column(nullable=True)
+    fnr: Mapped[Optional[float]] = mapped_column(nullable=True)
     auc: Mapped[Optional[float]] = mapped_column(nullable=True)
 
     # Architecture info
     n_features: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     vocab_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     total_samples: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+    # Retraining cycle metadata
+    samples_added: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)    # new samples used in this cycle
+    accuracy_delta: Mapped[Optional[float]] = mapped_column(nullable=True)          # accuracy vs previous version
+
+    # Active-version flag — at most one CNN row and one XGBoost row should be True
+    # at any time.  set_active_model() enforces this invariant.
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", index=True)
 
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -397,53 +412,150 @@ async def init_db():
 
 
 async def _seed_model_training_history():
-    """Seed ModelTrainingHistory with CNN metadata if table is empty."""
+    """
+    Seed ModelTrainingHistory from ALL cnn_fixed_metadata_*.json and
+    xgboost_metadata_*.json files in the models directory.
+
+    CNN versions are labelled v1.0, v1.1 … sorted oldest→newest.
+    XGBoost versions are labelled vXGB-1.0, vXGB-1.1 … (separate series).
+    accuracy_delta is calculated relative to the previous version within
+    each model-type series.
+    Skips seeding if the table already contains rows (use 'reseed' CLI to force).
+    """
     from sqlalchemy import select, func
+    import glob
     SessionLocal = get_session_maker()
     try:
         async with SessionLocal() as session:
             count = await session.scalar(select(func.count(ModelTrainingHistory.id)))
             if count and count > 0:
-                return  # Already seeded
-
-            # Locate metadata JSON relative to this file: ../models/
-            metadata_path = Path(__file__).parent.parent / "models" / "cnn_fixed_metadata_20260301_180706.json"
-            if not metadata_path.exists():
-                logger.warning(f"[SEED] Model metadata not found at {metadata_path}, skipping seed")
+                logger.info("[SEED] model_training_history already has rows — skipping seed")
                 return
-
-            with open(metadata_path) as f:
-                meta = json.load(f)
-
-            model_path = str(Path(__file__).parent.parent / "models" / "best_fixed_cnn_20260301_180706.keras")
-            trained_at_str = meta.get("timestamp", "2026-03-01T18:55:48")
-            try:
-                trained_at = datetime.fromisoformat(trained_at_str)
-            except Exception:
-                trained_at = datetime(2026, 3, 1, 18, 55, 48)
-
-            seed = ModelTrainingHistory(
-                version="1.0",
-                model_type=meta.get("model_type", "1D CNN"),
-                model_path=model_path,
-                dataset=meta.get("dataset", "Zenodo"),
-                accuracy=meta.get("accuracy", 0.0),
-                precision=meta.get("precision"),
-                recall=meta.get("recall"),
-                f1_score=meta.get("f1_score"),
-                fpr=meta.get("fpr"),
-                auc=meta.get("auc"),
-                n_features=meta.get("n_features"),
-                vocab_size=meta.get("vocab_size"),
-                total_samples=80000,
-                notes="Baseline 1D CNN model — Zenodo dataset",
-                trained_at=trained_at,
-            )
-            session.add(seed)
-            await session.commit()
-            logger.info("✓ ModelTrainingHistory seeded with baseline CNN metrics")
+            await _do_seed(session)
     except Exception as e:
         logger.warning(f"[SEED] Could not seed model training history: {e}")
+
+
+async def _do_seed(session: AsyncSession):
+    """Insert all metadata rows.  Called by _seed_model_training_history and reseed CLI."""
+    import glob
+    models_dir = Path(__file__).parent.parent / "models"
+
+    def _ts(filename: str) -> str:
+        """Extract the YYYYMMDD_HHMMSS timestamp from a metadata filename."""
+        stem = Path(filename).stem  # e.g. cnn_fixed_metadata_20260225_183744
+        parts = stem.split("_")
+        # last two parts are date + time  e.g. ["cnn","fixed","metadata","20260225","183744"]
+        return "_".join(parts[-2:])
+
+    def _parse_ts(ts: str) -> datetime:
+        try:
+            return datetime.strptime(ts, "%Y%m%d_%H%M%S")
+        except Exception:
+            return datetime.utcnow()
+
+    # ── Collect CNN metadata files ───────────────────────────────────────────
+    cnn_files = sorted(
+        glob.glob(str(models_dir / "cnn_fixed_metadata_*.json")),
+        key=lambda p: _ts(p)
+    )
+
+    # ── Collect XGBoost metadata files ──────────────────────────────────────
+    xgb_files = sorted(
+        glob.glob(str(models_dir / "xgboost_metadata_*.json")),
+        key=lambda p: _ts(p)
+    )
+
+    if not cnn_files and not xgb_files:
+        logger.warning("[SEED] No metadata JSON files found in models dir — skipping seed")
+        return
+
+    rows: list[ModelTrainingHistory] = []
+
+    # ── Build CNN rows ────────────────────────────────────────────────────────
+    prev_acc: Optional[float] = None
+    for idx, fpath in enumerate(cnn_files):
+        with open(fpath) as f:
+            meta = json.load(f)
+
+        ts = _ts(fpath)
+        trained_at = _parse_ts(ts)
+        version = f"1.{idx}"
+
+        # Match .keras file by timestamp
+        keras_path = models_dir / f"best_fixed_cnn_{ts}.keras"
+        model_path = str(keras_path) if keras_path.exists() else None
+
+        accuracy = float(meta.get("accuracy", 0.0))
+        delta = round(accuracy - prev_acc, 6) if prev_acc is not None else 0.0
+        prev_acc = accuracy
+
+        rows.append(ModelTrainingHistory(
+            version=version,
+            model_type=meta.get("model_type", "1D CNN"),
+            model_path=model_path,
+            dataset="MelbehaveD-v1 + Kaggle API Calls",
+            accuracy=accuracy,
+            precision=meta.get("precision"),
+            recall=meta.get("recall"),
+            f1_score=meta.get("f1_score"),
+            fnr=meta.get("fnr"),
+            auc=meta.get("auc"),
+            n_features=meta.get("n_features"),
+            vocab_size=meta.get("vocab_size"),
+            total_samples=meta.get("total_samples", 80000),
+            samples_added=0,
+            accuracy_delta=delta,
+            notes=f"Seeded from {Path(fpath).name}",
+            trained_at=trained_at,
+        ))
+
+    # ── Build XGBoost rows ────────────────────────────────────────────────────
+    prev_acc = None
+    for idx, fpath in enumerate(xgb_files):
+        with open(fpath) as f:
+            meta = json.load(f)
+
+        ts = _ts(fpath)
+        trained_at = _parse_ts(ts)
+        version = f"vXGB-1.{idx}"
+
+        pkl_path = models_dir / f"xgboost_zenodo_{ts}.pkl"
+        model_path = str(pkl_path) if pkl_path.exists() else None
+
+        # XGBoost metadata nests performance metrics
+        perf = meta.get("performance", {})
+        accuracy = float(perf.get("accuracy", meta.get("accuracy", 0.0)))
+        delta = round(accuracy - prev_acc, 6) if prev_acc is not None else 0.0
+        prev_acc = accuracy
+
+        rows.append(ModelTrainingHistory(
+            version=version,
+            model_type=meta.get("model_type", "XGBClassifier"),
+            model_path=model_path,
+            dataset="Zenodo",
+            accuracy=accuracy,
+            precision=meta.get("precision"),        # usually absent in XGB meta
+            recall=meta.get("recall"),
+            f1_score=meta.get("f1_score"),
+            fnr=meta.get("fnr"),
+            auc=float(perf.get("roc_auc", meta.get("auc", 0.0))) or None,
+            n_features=meta.get("n_features"),
+            vocab_size=None,
+            total_samples=meta.get("n_samples"),
+            samples_added=0,
+            accuracy_delta=delta,
+            notes=f"Seeded from {Path(fpath).name}",
+            trained_at=trained_at,
+        ))
+
+    # Insert all rows sorted by trained_at so IDs are chronological
+    rows.sort(key=lambda r: r.trained_at)
+    for row in rows:
+        session.add(row)
+    await session.commit()
+    logger.info(f"✓ ModelTrainingHistory seeded with {len(rows)} version(s) "
+                f"({len(cnn_files)} CNN + {len(xgb_files)} XGBoost)")
 
 
 async def get_session() -> AsyncSession:
@@ -756,6 +868,7 @@ async def queue_uncertain_sample(
     behavioral_enriched: bool = False,
     behavioral_source: Optional[str] = None,
     scan_id: Optional[int] = None,
+    api_sequence_json: Optional[str] = None,
 ) -> UncertainSampleQueue:
     """
     Queue an uncertain sample for later VT upload
@@ -801,6 +914,7 @@ async def queue_uncertain_sample(
         behavioral_enriched=behavioral_enriched,
         behavioral_source=behavioral_source,
         features_json=features_json,
+        api_sequence_json=api_sequence_json,
         status="PENDING",
         scan_id=scan_id,
     )
@@ -1240,25 +1354,39 @@ async def bulk_approve_uncertain_samples(
     scan_ids: list[int],
 ) -> int:
     """
-    Mark a list of scan_history rows as admin_review=True (approved for retrain).
-    Returns the number of rows updated.
+    Mark a list of scan_history rows as admin_review=True and derive an admin_label
+    for each linked uncertain_sample_queue entry from scan_history.is_malicious.
+    For entries the admin already individually reviewed the label is preserved.
+    Returns the number of scan_history rows updated.
     """
-    from sqlalchemy import update
+    from sqlalchemy import select, update
 
     if not scan_ids:
         return 0
 
-    stmt = (
-        update(ScanHistory)
-        .where(ScanHistory.id.in_(scan_ids))
-        .values(
-            admin_review=True,
-            admin_decision_date=datetime.utcnow(),
+    # Fetch scan rows so we can read is_malicious per entry
+    fetch_stmt = select(ScanHistory).where(ScanHistory.id.in_(scan_ids))
+    result = await session.execute(fetch_stmt)
+    scans = result.scalars().all()
+
+    now = datetime.utcnow()
+    for sh in scans:
+        sh.admin_review = True
+        sh.admin_decision_date = now
+
+        # Derive label in training convention (0=benign, 1=malicious)
+        lbl = 1 if sh.is_malicious else 0
+        # Only set admin_label if it hasn't been explicitly assigned via individual review
+        usq_stmt = (
+            update(UncertainSampleQueue)
+            .where(UncertainSampleQueue.scan_id == sh.id)
+            .where(UncertainSampleQueue.admin_label == None)  # noqa: E711
+            .values(admin_label=lbl)
         )
-    )
-    result = await session.execute(stmt)
+        await session.execute(usq_stmt)
+
     await session.commit()
-    return result.rowcount
+    return len(scans)
 
 
 async def get_approved_for_retrain(session: AsyncSession) -> list[dict]:
@@ -1273,7 +1401,7 @@ async def get_approved_for_retrain(session: AsyncSession) -> list[dict]:
             UncertainSampleQueue,
             ScanHistory.file_name.label("sh_file_name"),
             ScanHistory.confidence.label("sh_confidence"),
-            ScanHistory.is_malicious.label("sh_is_malicious"),
+            UncertainSampleQueue.admin_label.label("usq_admin_label"),
             ScanHistory.admin_decision_date.label("sh_admin_decision_date"),
         )
         .join(ScanHistory, UncertainSampleQueue.scan_id == ScanHistory.id)
@@ -1314,6 +1442,8 @@ async def insert_model_training_record(
     n_features: Optional[int] = None,
     vocab_size: Optional[int] = None,
     notes: Optional[str] = None,
+    samples_added: Optional[int] = None,
+    accuracy_delta: Optional[float] = None,
 ) -> ModelTrainingHistory:
     """Insert a new model training record after a successful retraining run."""
     row = ModelTrainingHistory(
@@ -1330,6 +1460,8 @@ async def insert_model_training_record(
         n_features=n_features,
         vocab_size=vocab_size,
         total_samples=total_samples,
+        samples_added=samples_added,
+        accuracy_delta=accuracy_delta,
         notes=notes,
         trained_at=datetime.utcnow(),
     )
@@ -1469,3 +1601,239 @@ async def backfill_uncertain_queue_from_history(
         await session.commit()
     logger.info(f"[BACKFILL] Inserted {inserted} entries into uncertain_sample_queue")
     return inserted
+
+
+# ============================================================================
+# ACTIVE-MODEL SELECTION
+# ============================================================================
+
+async def get_active_models(session: AsyncSession) -> dict:
+    """
+    Return the currently active CNN and XGBoost model rows.
+
+    Returns:
+        {
+          "cnn":     ModelTrainingHistory | None,
+          "xgboost": ModelTrainingHistory | None,
+        }
+    """
+    from sqlalchemy import select
+
+    stmt = select(ModelTrainingHistory).where(ModelTrainingHistory.is_active == True)  # noqa: E712
+    result = await session.execute(stmt)
+    rows = result.scalars().all()
+
+    out = {"cnn": None, "xgboost": None}
+    for row in rows:
+        mt = (row.model_type or "").lower()
+        if "cnn" in mt or "1d" in mt:
+            out["cnn"] = row
+        elif "xgb" in mt or "xgboost" in mt or "gradient" in mt:
+            out["xgboost"] = row
+    return out
+
+
+async def set_active_model(session: AsyncSession, record_id: int) -> ModelTrainingHistory:
+    """
+    Mark a model_training_history row as the active version for its model family.
+
+    For whichever family the chosen row belongs to (CNN or XGBoost), ALL existing
+    active flags for that family are cleared first, then the chosen row is set.
+
+    Returns the updated row.
+    Raises ValueError if record_id is not found.
+    """
+    from sqlalchemy import select, update
+
+    # Fetch the target row
+    stmt = select(ModelTrainingHistory).where(ModelTrainingHistory.id == record_id)
+    result = await session.execute(stmt)
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise ValueError(f"ModelTrainingHistory id={record_id} not found")
+
+    # Determine family
+    mt = (row.model_type or "").lower()
+    if "cnn" in mt or "1d" in mt:
+        family_filter = ModelTrainingHistory.model_type.ilike("%CNN%")
+    else:
+        # XGBoost / GradientBoosting
+        family_filter = ModelTrainingHistory.model_type.ilike("%XGB%")
+
+    # Unset all active flags for this family
+    await session.execute(
+        update(ModelTrainingHistory)
+        .where(family_filter)
+        .values(is_active=False)
+    )
+
+    # Set the chosen row active
+    row.is_active = True
+    session.add(row)
+    await session.commit()
+    await session.refresh(row)
+    return row
+
+
+async def get_all_model_versions(session: AsyncSession) -> list[ModelTrainingHistory]:
+    """Return all ModelTrainingHistory rows ordered oldest → newest (for version chart)."""
+    from sqlalchemy import select
+
+    result = await session.execute(
+        select(ModelTrainingHistory).order_by(ModelTrainingHistory.trained_at.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def export_approved_samples_for_retraining(
+    session: AsyncSession,
+    xgb_feature_names: Optional[list[str]] = None,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """
+    Export approved uncertain_sample_queue entries to flat files for retraining:
+
+    - augment_cnn.json  : list of {api_sequence: [...], label: 0|1}  (0=benign, 1=malicious)
+    - augment_xgb.csv   : CSV with feature columns + label (0=benign, 1=malicious)
+
+    Only entries with admin_review=True on the linked scan_history are exported.
+    Entries missing api_sequence_json are skipped for the CNN export;
+    entries where features_json == '[]' are skipped for the XGBoost export.
+
+    Returns:
+        {cnn_rows, xgb_rows, cnn_path, xgb_path, output_dir}
+    """
+    import csv
+    from sqlalchemy import select
+
+    out_dir = Path(output_dir) if output_dir else (
+        Path(__file__).parent / "training_script" / "augment_data"
+    )
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Fetch approved queue entries
+    stmt = (
+        select(UncertainSampleQueue)
+        .join(ScanHistory, UncertainSampleQueue.scan_id == ScanHistory.id)
+        .where(ScanHistory.admin_review == True)  # noqa: E712
+    )
+    result = await session.execute(stmt)
+    entries = result.scalars().all()
+
+    cnn_rows: list[dict] = []
+    xgb_rows: list[dict] = []
+
+    for e in entries:
+        # Use the admin-assigned ground-truth label (training convention: 0=benign, 1=malicious).
+        # Skip entries that were never explicitly labelled — training on the model's own
+        # uncertain prediction would introduce noise.
+        if e.admin_label is None:
+            continue
+        label = e.admin_label
+
+        # ── CNN export ────────────────────────────────────────────────────
+        if e.api_sequence_json:
+            try:
+                seq = json.loads(e.api_sequence_json)
+                if isinstance(seq, list) and seq:
+                    cnn_rows.append({"api_sequence": seq, "label": label})
+            except Exception:
+                pass
+
+        # ── XGBoost export ────────────────────────────────────────────────
+        if e.features_json and e.features_json != "[]":
+            try:
+                feat_vals = json.loads(e.features_json)
+                if isinstance(feat_vals, list) and feat_vals:
+                    if xgb_feature_names and len(xgb_feature_names) == len(feat_vals):
+                        row = dict(zip(xgb_feature_names, feat_vals))
+                    else:
+                        row = {f"f{i}": v for i, v in enumerate(feat_vals)}
+                    row["label"] = label
+                    xgb_rows.append(row)
+            except Exception:
+                pass
+
+    # Write CNN JSON
+    cnn_path = out_dir / "augment_cnn.json"
+    with open(cnn_path, "w") as f:
+        json.dump(cnn_rows, f)
+
+    # Write XGBoost CSV
+    xgb_path = out_dir / "augment_xgb.csv"
+    if xgb_rows:
+        fieldnames = list(xgb_rows[0].keys())
+        with open(xgb_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(xgb_rows)
+    else:
+        xgb_path.write_text("")
+
+    logger.info(
+        f"[EXPORT] Wrote {len(cnn_rows)} CNN rows → {cnn_path.name} | "
+        f"{len(xgb_rows)} XGBoost rows → {xgb_path.name}"
+    )
+    return {
+        "cnn_rows": len(cnn_rows),
+        "xgb_rows": len(xgb_rows),
+        "cnn_path": str(cnn_path),
+        "xgb_path": str(xgb_path),
+        "output_dir": str(out_dir),
+    }
+
+
+# ============================================================================
+# CLI ENTRY POINT
+# Usage:
+#   python db_manager.py init       — create tables + seed model metadata
+#   python db_manager.py backfill   — populate uncertain_sample_queue from scan_history
+#   python db_manager.py reseed     — drop + re-insert all model_training_history rows
+# ============================================================================
+
+if __name__ == "__main__":
+    import asyncio
+    import sys
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "help"
+
+    if cmd == "init":
+        asyncio.run(init_db())
+
+    elif cmd == "backfill":
+        async def _backfill():
+            sm = get_session_maker()
+            async with sm() as session:
+                n = await backfill_uncertain_queue_from_history(session)
+                print(f"Backfill complete — {n} rows inserted into uncertain_sample_queue.")
+        asyncio.run(_backfill())
+
+    elif cmd == "reseed":
+        async def _reseed():
+            from sqlalchemy import delete
+            # Ensure tables exist first
+            eng = get_engine()
+            async with eng.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
+            sm = get_session_maker()
+            async with sm() as session:
+                # Clear existing rows
+                await session.execute(delete(ModelTrainingHistory))
+                await session.commit()
+                print("Cleared existing model_training_history rows.")
+
+                await _do_seed(session)
+                # Count result
+                from sqlalchemy import select, func
+                n = await session.scalar(select(func.count(ModelTrainingHistory.id)))
+                print(f"Reseed complete — {n} version(s) in model_training_history.")
+        asyncio.run(_reseed())
+
+    else:
+        print("Usage: python db_manager.py [init|backfill|reseed]")
+        print("  init      — create all tables and seed model_training_history")
+        print("  backfill  — copy scan_history rows (confidence 0.3–0.7) into uncertain_sample_queue")
+        print("  reseed    — drop and re-insert all model_training_history from metadata JSON files")

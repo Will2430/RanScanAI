@@ -30,7 +30,7 @@ logger.info("=" * 80)
 # Paths - relative to script location
 script_dir = Path(__file__).parent
 project_root = script_dir.parent.parent
-dataset_path = project_root / 'dataset' / 'Zenedo.csv'
+dataset_path = r"C:\Users\User\Downloads\Dataset\Zenedo.csv"
 models_dir = project_root / 'models'
 models_dir.mkdir(exist_ok=True)
 
@@ -199,6 +199,28 @@ X = X.replace([np.inf, -np.inf], 0)
 # Store feature names
 feature_cols = X.columns.tolist()
 
+# ── DB augment samples (from retrain pipeline) ───────────────────────────────
+# Written by export_approved_samples_for_retraining() before each retrain run.
+_augment_path = Path(__file__).resolve().parent / "augment_data" / "augment_xgb.csv"
+if _augment_path.exists() and _augment_path.stat().st_size > 0:
+    try:
+        _aug = pd.read_csv(_augment_path)
+        # Align columns: keep only columns that exist in the main dataset,
+        # fill any missing feature columns with 0, then relabel 'label' as y.
+        _aug_y = _aug["label"] if "label" in _aug.columns else pd.Series(dtype=int)
+        _aug_X = _aug.reindex(columns=feature_cols, fill_value=0)
+        if len(_aug_X) > 0 and len(_aug_y) == len(_aug_X):
+            X = pd.concat([X, _aug_X], ignore_index=True)
+            y = pd.concat([y, _aug_y], ignore_index=True)
+            logger.info(f"[DB-AUGMENT] Added {len(_aug_X)} rows from {_augment_path.name} "
+                        f"(total now: {len(X)})")
+        else:
+            logger.warning("[DB-AUGMENT] augment_xgb.csv column mismatch or empty — skipped")
+    except Exception as _ae:
+        logger.warning(f"[DB-AUGMENT] Failed to load augment_xgb.csv: {_ae}")
+else:
+    logger.info("[DB-AUGMENT] No augment_xgb.csv found — training on original dataset only")
+# ─────────────────────────────────────────────────────────────────────────────
 logger.info(f"Features: {len(X.columns)}")
 logger.info(f"Class distribution:\n{y.value_counts()}")
 logger.info(f"Class balance: {y.mean():.2%} malicious")
@@ -275,6 +297,10 @@ print(f"                Benign  Malware")
 print(f"   Actual Benign   {cm[0,0]:<6}  {cm[0,1]:<6}")
 print(f"          Malware  {cm[1,0]:<6}  {cm[1,1]:<6}")
 
+tn, fp, fn, tp = cm.ravel()
+fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
+fnr = fn / (fn + tp) if (fn + tp) > 0 else 0
+
 # Cross-validation
 print(f"\n🔄 5-Fold Cross-Validation:")
 cv_scores = cross_val_score(model, X_train_scaled, y_train, cv=5, scoring='accuracy')
@@ -332,7 +358,10 @@ metadata = {
         'accuracy': float(accuracy),
         'roc_auc': float(auc),
         'cv_mean': float(cv_scores.mean()),
-        'cv_std': float(cv_scores.std())
+        'cv_std': float(cv_scores.std()),
+        'precision': float(classification_report(y_test, y_pred, output_dict=True)['malware']['precision']),
+        'fpr': float(fpr),
+        'fnr': float(fnr),
     },
     'hyperparameters': {
         'n_estimators': model.n_estimators,
@@ -342,6 +371,7 @@ metadata = {
         'colsample_bytree': model.colsample_bytree,
         'random_state': model.random_state
     },
+    'path_to_model': str(models_dir / model_filename),
     'training_time_seconds': training_time,
     'confusion_matrix': cm.tolist(),
     'feature_importance': feature_importance.to_dict('records')[:20]  # Top 20

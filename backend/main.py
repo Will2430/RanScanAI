@@ -675,6 +675,138 @@ async def stream_scan_result(
 
 
 # ==============================================================================
+# MODEL VERSION MANAGEMENT  (admin only)
+# Lets admin choose which CNN / XGBoost version is currently loaded in
+# model_service.  Reads/writes model_training_history.is_active, then
+# tells model_service to hot-reload via POST http://localhost:8001/reload-model.
+# ==============================================================================
+
+CNN_SERVICE_URL_BASE = os.getenv("CNN_MODEL_SERVICE_URL", "http://127.0.0.1:8001")
+
+
+@app.get("/api/models/versions")
+async def list_model_versions(
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """
+    Return all model_training_history rows grouped by model family.
+
+    Response shape:
+    {
+      "cnn":     [{id, version, accuracy, model_path, trained_at, is_active, ...}, ...],
+      "xgboost": [...],
+    }
+    """
+    from db_manager import get_all_model_versions
+
+    rows = await get_all_model_versions(db)
+
+    def _row_dict(r):
+        return {
+            "id":            r.id,
+            "version":       r.version,
+            "model_type":    r.model_type,
+            "accuracy":      r.accuracy,
+            "precision":     r.precision,
+            "recall":        r.recall,
+            "f1_score":      r.f1_score,
+            "auc":           r.auc,
+            "n_features":    r.n_features,
+            "total_samples": r.total_samples,
+            "samples_added": r.samples_added,
+            "accuracy_delta":r.accuracy_delta,
+            "model_path":    r.model_path,
+            "dataset":       r.dataset,
+            "notes":         r.notes,
+            "is_active":     r.is_active,
+            "trained_at":    r.trained_at.isoformat() if r.trained_at else None,
+        }
+
+    cnn_rows = []
+    xgb_rows = []
+    for r in rows:
+        mt = (r.model_type or "").lower()
+        if "cnn" in mt or "1d" in mt:
+            cnn_rows.append(_row_dict(r))
+        else:
+            xgb_rows.append(_row_dict(r))
+
+    return {"cnn": cnn_rows, "xgboost": xgb_rows}
+
+
+@app.get("/api/models/active")
+async def get_active_model_versions(
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """
+    Return the currently active CNN and XGBoost model versions (is_active=True).
+    """
+    from db_manager import get_active_models
+
+    active = await get_active_models(db)
+
+    def _row_dict(r):
+        if r is None:
+            return None
+        return {
+            "id":         r.id,
+            "version":    r.version,
+            "model_type": r.model_type,
+            "accuracy":   r.accuracy,
+            "model_path": r.model_path,
+            "is_active":  r.is_active,
+            "trained_at": r.trained_at.isoformat() if r.trained_at else None,
+        }
+
+    return {
+        "cnn":     _row_dict(active.get("cnn")),
+        "xgboost": _row_dict(active.get("xgboost")),
+    }
+
+
+@app.post("/api/models/set-active")
+async def set_active_model_version(
+    record_id: int,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """
+    Mark a model_training_history row as the active version for its model family,
+    then hot-reload model_service so it immediately picks up the change.
+
+    Body: ?record_id=<int>   (query-param; no body required)
+    """
+    import httpx
+    from db_manager import set_active_model
+
+    try:
+        row = await set_active_model(db, record_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    # Ask model_service to reload from the new active selection
+    reload_ok = False
+    reload_msg = ""
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(f"{CNN_SERVICE_URL_BASE}/reload-model")
+        reload_ok  = resp.status_code == 200
+        reload_msg = resp.json().get("message", "") if reload_ok else f"HTTP {resp.status_code}"
+    except Exception as exc:
+        reload_msg = f"model_service unreachable: {exc}"
+        logger.warning(f"[set-active] Could not trigger model_service reload: {exc}")
+
+    return {
+        "status":      "ok",
+        "activated":   {"id": row.id, "version": row.version, "model_type": row.model_type},
+        "reload_ok":   reload_ok,
+        "reload_msg":  reload_msg,
+    }
+
+
+# ==============================================================================
 # DATABASE LOG QUERY ENDPOINTS
 # ==============================================================================
 

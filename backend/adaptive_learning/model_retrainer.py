@@ -1,278 +1,193 @@
 """
-Adaptive Learning System - Automated Retraining
-Periodically retrains the model with new validated samples
+Adaptive Learning System - Model Retrainer
+
+Runs train_cnn_fixed.py and train_xgboost_zenodo.py as subprocesses so that
+heavy ML dependencies (TensorFlow, XGBoost) are never loaded into the FastAPI
+server process.
+
+After each script finishes, reads the newest metadata JSON written to models/
+to surface post-training metrics back to the caller.
+
+Usage (from retrain_routes.py):
+    from adaptive_learning.model_retrainer import ModelRetrainer
+    retrainer = ModelRetrainer()
+    results = retrainer.run_all()          # sync — must be called from executor
 """
 
-import pandas as pd
-import numpy as np
 import json
-import os
-import joblib
-from datetime import datetime
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
-from feedback_collector import FeedbackCollector
+import logging
+import subprocess
+import sys
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Directory layout (relative to this file):
+#   backend/adaptive_learning/model_retrainer.py  <- here
+#   backend/training_script/                      <- training scripts
+#   K/models/                                     <- output: .keras, .pkl, metadata JSONs
+_THIS_DIR   = Path(__file__).resolve().parent           # backend/adaptive_learning/
+_SCRIPT_DIR = _THIS_DIR.parent / "training_script"      # backend/training_script/
+_MODELS_DIR = _THIS_DIR.parent.parent / "models"        # K/models/
 
 
 class ModelRetrainer:
     """
-    Handles automated model retraining with feedback samples
+    Manages execution of the CNN and XGBoost training scripts.
+
+    Both scripts are launched as subprocesses so TensorFlow / XGBoost are
+    isolated from the FastAPI worker process.  This also means each run gets a
+    completely fresh Python interpreter — no cached state between retraining
+    sessions.
+
+    After a script exits successfully the retrainer locates the metadata JSON
+    that was written to models/ and returns it as a plain dict so the caller
+    can persist the metrics to the database.
     """
-    
-    def __init__(self, 
-                 original_dataset_path: str = "Dataset/Zenedo.csv",
-                 current_model_path: str = "malware_detector_zenodo_v1.pkl",
-                 backup_dir: str = "adaptive_learning/model_backups"):
-        
-        self.original_dataset_path = original_dataset_path
-        self.current_model_path = current_model_path
-        self.backup_dir = backup_dir
-        self.feedback_collector = FeedbackCollector()
-        
-        os.makedirs(backup_dir, exist_ok=True)
-    
-    def load_original_data(self):
-        """Load the original training dataset"""
-        print("[RETRAIN] Loading original training data...")
-        df = pd.read_csv(self.original_dataset_path)
-        
-        # Prepare features
-        drop_cols = ['md5', 'sha1', 'Class', 'Category', 'Family']
-        feature_cols = [col for col in df.columns if col not in drop_cols]
-        
-        X = df[feature_cols].copy()
-        y = (df['Class'] == 'Benign').astype(int)
-        
-        # Handle categorical features
-        categorical_cols = X.select_dtypes(include=['object']).columns.tolist()
-        if categorical_cols:
-            from sklearn.preprocessing import LabelEncoder
-            for col in categorical_cols:
-                le = LabelEncoder()
-                X[col] = le.fit_transform(X[col].astype(str))
-        
-        # Fill missing values
-        X = X.fillna(0)
-        
-        print(f"[RETRAIN] Original data: {len(X):,} samples, {len(feature_cols)} features")
-        
-        return X, y, feature_cols
-    
-    def prepare_feedback_samples(self, feedback_df: pd.DataFrame, feature_cols: list):
+
+    def __init__(self):
+        self.script_dir = _SCRIPT_DIR
+        self.models_dir = _MODELS_DIR
+
+    # ── Internal helpers ──────────────────────────────────────────────────
+
+    def _run_script(self, script_name: str, timeout: int) -> subprocess.CompletedProcess:
         """
-        Convert feedback samples to training data format
-        
-        Args:
-            feedback_df: DataFrame from feedback collector
-            feature_cols: List of expected feature columns
-            
-        Returns:
-            X, y: Features and labels for new samples
+        Launch *script_name* inside script_dir and wait for it to finish.
+
+        stdout / stderr are inherited so training progress is visible in the
+        parent process log / console rather than being silently swallowed.
+
+        Raises:
+            subprocess.TimeoutExpired  — if the script takes longer than *timeout* seconds
+            subprocess.CalledProcessError — (not raised; caller checks returncode)
         """
-        print(f"[RETRAIN] Processing {len(feedback_df)} feedback samples...")
-        
-        new_samples = []
-        labels = []
-        
-        for idx, row in feedback_df.iterrows():
-            try:
-                # Parse features JSON
-                features = json.loads(row['features_json'])
-                
-                # Use VT as ground truth
-                # If VT says malicious (>5 detections), label as 0 (malicious)
-                # If VT says clean, label as 1 (benign)
-                label = 0 if row['vt_malicious'] else 1
-                
-                # Ensure all expected features are present
-                feature_vector = []
-                for col in feature_cols:
-                    feature_vector.append(features.get(col, 0))
-                
-                new_samples.append(feature_vector)
-                labels.append(label)
-                
-            except Exception as e:
-                print(f"[RETRAIN] ⚠️  Skipping sample {row['file_hash'][:8]}: {e}")
-                continue
-        
-        if not new_samples:
-            return None, None
-        
-        X_new = pd.DataFrame(new_samples, columns=feature_cols)
-        y_new = pd.Series(labels)
-        
-        print(f"[RETRAIN] ✓ Prepared {len(X_new)} valid samples")
-        print(f"           Malicious: {(y_new == 0).sum()}, Benign: {(y_new == 1).sum()}")
-        
-        return X_new, y_new
-    
-    def retrain_model(self, min_samples: int = 50):
-        """
-        Main retraining function
-        
-        Args:
-            min_samples: Minimum number of feedback samples required
-            
-        Returns:
-            bool: True if retrained successfully
-        """
-        print("\n" + "="*80)
-        print("ADAPTIVE LEARNING - MODEL RETRAINING")
-        print("="*80)
-        print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print()
-        
-        # 1. Check if retraining is needed
-        if not self.feedback_collector.should_retrain(threshold=min_samples):
-            pending = self.feedback_collector.get_pending_samples_count()
-            print(f"[RETRAIN] Not enough samples ({pending}/{min_samples}). Skipping retraining.")
-            return False
-        
-        # 2. Load original data
-        X_orig, y_orig, feature_cols = self.load_original_data()
-        
-        # 3. Get feedback samples
-        feedback_df = self.feedback_collector.get_samples_for_retraining()
-        X_new, y_new = self.prepare_feedback_samples(feedback_df, feature_cols)
-        
-        if X_new is None or len(X_new) < min_samples:
-            print(f"[RETRAIN] ❌ Insufficient valid samples after processing")
-            return False
-        
-        # 4. Combine datasets
-        print(f"\n[RETRAIN] Combining datasets...")
-        X_combined = pd.concat([X_orig, X_new], ignore_index=True)
-        y_combined = pd.concat([y_orig, y_new], ignore_index=True)
-        
-        print(f"           Original: {len(X_orig):,} samples")
-        print(f"           New:      {len(X_new):,} samples")
-        print(f"           Combined: {len(X_combined):,} samples")
-        
-        # 5. Split for validation
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_combined, y_combined,
-            test_size=0.2,
-            random_state=42,
-            stratify=y_combined
+        script_path = self.script_dir / script_name
+        if not script_path.exists():
+            raise FileNotFoundError(f"Training script not found: {script_path}")
+
+        logger.info(f"[RETRAIN] Launching {script_name} (timeout={timeout}s) ...")
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            cwd=str(self.script_dir),   # so relative path imports inside the scripts work
+            timeout=timeout,
         )
-        
-        # 6. Train new model
-        print(f"\n[RETRAIN] Training new model...")
-        new_model = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=15,
-            min_samples_split=10,
-            min_samples_leaf=5,
-            random_state=42,
-            n_jobs=-1,
-            verbose=0
-        )
-        
-        new_model.fit(X_train, y_train)
-        
-        # 7. Evaluate new model
-        train_acc = new_model.score(X_train, y_train)
-        test_acc = new_model.score(X_test, y_test)
-        y_pred = new_model.predict(X_test)
-        
-        print(f"\n[RETRAIN] New Model Performance:")
-        print(f"           Training Accuracy: {train_acc:.4f}")
-        print(f"           Test Accuracy:     {test_acc:.4f}")
-        
-        # Confusion matrix
-        cm = confusion_matrix(y_test, y_pred)
-        tn, fp, fn, tp = cm.ravel()
-        fpr = fp / (fp + tp) if (fp + tp) > 0 else 0
-        
-        print(f"           False Positive Rate: {fpr:.4f}")
-        
-        # 8. Load old model for comparison
-        if os.path.exists(self.current_model_path):
-            old_model = joblib.load(self.current_model_path)
-            old_acc = old_model.score(X_test, y_test)
-            print(f"\n[RETRAIN] Comparison:")
-            print(f"           Old Model: {old_acc:.4f}")
-            print(f"           New Model: {test_acc:.4f}")
-            print(f"           Δ Change:  {(test_acc - old_acc):+.4f} ({(test_acc - old_acc) / old_acc * 100:+.2f}%)")
+
+        if result.returncode != 0:
+            logger.error(f"[RETRAIN] {script_name} exited with code {result.returncode}")
         else:
-            old_acc = 0.9933  # Baseline
-        
-        # 9. Decide whether to deploy
-        # Deploy if new model is within 1% of old model or better
-        tolerance = 0.01
-        should_deploy = test_acc >= (old_acc - tolerance)
-        
-        if should_deploy:
-            print(f"\n[RETRAIN] ✓ New model meets quality threshold!")
-            
-            # Backup old model
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = os.path.join(self.backup_dir, f"model_v{timestamp}.pkl")
-            
-            if os.path.exists(self.current_model_path):
-                os.rename(self.current_model_path, backup_path)
-                print(f"           Old model backed up: {backup_path}")
-            
-            # Save new model
-            joblib.dump(new_model, self.current_model_path)
-            print(f"           New model deployed: {self.current_model_path}")
-            
-            # Mark feedback samples as processed
-            processed_hashes = feedback_df['file_hash'].tolist()
-            self.feedback_collector.mark_samples_processed(processed_hashes)
-            
-            # Update version manager
-            from model_version_manager import ModelVersionManager
-            version_mgr = ModelVersionManager()
-            version_mgr.update_version(
-                new_accuracy=test_acc,
-                samples_added=len(X_new)
+            logger.info(f"[RETRAIN] {script_name} finished successfully")
+
+        return result
+
+    def _latest_metadata(self, pattern: str) -> dict | None:
+        """
+        Find the most recently modified file matching *pattern* in models_dir
+        and return its parsed JSON, or None if no match / parse error.
+        """
+        files = sorted(
+            self.models_dir.glob(pattern),
+            key=lambda p: p.stat().st_mtime,
+        )
+        if not files:
+            logger.warning(
+                f"[RETRAIN] No metadata file matching '{pattern}' found in {self.models_dir}"
             )
-            
-            # Log the update
-            log_file = "adaptive_learning/retraining_log.txt"
-            with open(log_file, 'a') as f:
-                f.write(f"{datetime.now().isoformat()} | "
-                       f"Retrained with {len(X_new)} samples | "
-                       f"Accuracy: {old_acc:.4f} → {test_acc:.4f} | "
-                       f"FPR: {fpr:.4f}\n")
-            
-            print(f"\n[RETRAIN] ✓ Retraining complete!")
-            print("="*80)
-            
-            return True
-        
-        else:
-            print(f"\n[RETRAIN] ❌ New model underperforms (acc={test_acc:.4f} < {old_acc:.4f})")
-            print(f"           Keeping old model. Review feedback samples manually.")
-            print("="*80)
-            
-            return False
+            return None
+        try:
+            with open(files[-1]) as f:
+                data = json.load(f)
+            logger.info(f"[RETRAIN] Read metadata from {files[-1].name}")
+            return data
+        except Exception as exc:
+            logger.error(f"[RETRAIN] Could not parse {files[-1].name}: {exc}")
+            return None
 
+    # ── Public API ────────────────────────────────────────────────────────
 
-def main():
-    """Main entry point for scheduled retraining"""
-    retrainer = ModelRetrainer()
-    
-    # Attempt retraining with minimum 50 samples
-    success = retrainer.retrain_model(min_samples=50)
-    
-    if success:
-        print("\n✓ Model successfully updated with new knowledge!")
-    else:
-        print("\n⚠️  Retraining skipped or failed. Check logs.")
-    
-    # Print feedback statistics
-    print("\n" + "="*80)
-    print("FEEDBACK STATISTICS")
-    print("="*80)
-    stats = retrainer.feedback_collector.get_statistics()
-    for key, value in stats.items():
-        print(f"{key:.<30} {value:>5,}")
-    print("="*80)
+    def run_cnn(self, timeout: int = 7200) -> dict | None:
+        """
+        Run train_cnn_fixed.py.
 
+        Returns:
+            Parsed cnn_fixed_metadata_*.json dict on success, else None.
+        """
+        try:
+            proc = self._run_script("train_cnn_fixed.py", timeout)
+            if proc.returncode != 0:
+                return None
+            return self._latest_metadata("cnn_fixed_metadata_*.json")
+        except subprocess.TimeoutExpired:
+            logger.error(f"[RETRAIN] CNN training timed out after {timeout}s")
+            return None
+        except FileNotFoundError as exc:
+            logger.error(f"[RETRAIN] {exc}")
+            return None
+        except Exception as exc:
+            logger.error(f"[RETRAIN] CNN training error: {exc}", exc_info=True)
+            return None
 
-if __name__ == "__main__":
-    main()
+    def run_xgboost(self, timeout: int = 3600) -> dict | None:
+        """
+        Run train_xgboost_zenodo.py.
+
+        Returns:
+            Parsed xgboost_metadata_*.json dict on success, else None.
+        """
+        try:
+            proc = self._run_script("train_xgboost_zenodo.py", timeout)
+            if proc.returncode != 0:
+                return None
+            return self._latest_metadata("xgboost_metadata_*.json")
+        except subprocess.TimeoutExpired:
+            logger.error(f"[RETRAIN] XGBoost training timed out after {timeout}s")
+            return None
+        except FileNotFoundError as exc:
+            logger.error(f"[RETRAIN] {exc}")
+            return None
+        except Exception as exc:
+            logger.error(f"[RETRAIN] XGBoost training error: {exc}", exc_info=True)
+            return None
+
+    def run_all(
+        self,
+        run_cnn: bool = True,
+        run_xgboost: bool = True,
+        timeout_cnn: int = 7200,
+        timeout_xgb: int = 3600,
+    ) -> dict:
+        """
+        Run one or both training scripts sequentially (CNN first, then XGBoost).
+
+        This is a blocking / synchronous call — wrap it in
+        ``asyncio.get_event_loop().run_in_executor(None, ...)`` when calling
+        from an async context so the event loop is not blocked.
+
+        Returns:
+            {
+                "cnn":     dict | None,   # parsed metadata from CNN run
+                "xgboost": dict | None,   # parsed metadata from XGBoost run
+                "errors":  list[str],     # names of scripts that failed
+            }
+        """
+        results: dict = {"cnn": None, "xgboost": None, "errors": []}
+
+        if run_cnn:
+            logger.info("[RETRAIN] ── CNN training ───────────────────────────────────────")
+            results["cnn"] = self.run_cnn(timeout=timeout_cnn)
+            if results["cnn"] is None:
+                results["errors"].append("train_cnn_fixed.py")
+                logger.warning("[RETRAIN] CNN training did not produce a metadata file")
+
+        if run_xgboost:
+            logger.info("[RETRAIN] ── XGBoost training ─────────────────────────────────")
+            results["xgboost"] = self.run_xgboost(timeout=timeout_xgb)
+            if results["xgboost"] is None:
+                results["errors"].append("train_xgboost_zenodo.py")
+                logger.warning("[RETRAIN] XGBoost training did not produce a metadata file")
+
+        n_attempted = int(run_cnn) + int(run_xgboost)
+        n_failed    = len(results["errors"])
+        status = "success" if n_failed == 0 else ("partial" if n_failed < n_attempted else "failed")
+        logger.info(f"[RETRAIN] run_all complete — status={status}, errors={results['errors']}")
+        return results

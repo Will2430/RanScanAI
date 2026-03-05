@@ -14,7 +14,7 @@ from datetime import datetime
 import logging
 
 from db_manager import (
-    get_session_maker, get_session, ScanHistory, User,
+    get_session_maker, get_session, ScanHistory, User, UncertainSampleQueue,
     get_uncertain_samples_with_vt_status, bulk_approve_uncertain_samples,
 )
 from auth.routes import get_current_user, get_current_admin
@@ -655,6 +655,7 @@ async def submit_detection_review(
 
             # Update with admin decision
             is_malicious = (review.admin_decision == 'malware')
+            now = datetime.utcnow()
             update_stmt = (
                 update(ScanHistory)
                 .where(ScanHistory.id == detection_id)
@@ -662,10 +663,22 @@ async def submit_detection_review(
                     is_malicious=is_malicious,
                     prediction_label="MALWARE" if is_malicious else "BENIGN",
                     admin_review=True,
-                    admin_decision_date=datetime.utcnow()
+                    admin_decision_date=now,
                 )
             )
             await session.execute(update_stmt)
+
+            # Write the ground-truth label to the linked uncertain_sample_queue entry.
+            # Training convention: 0=benign, 1=malicious — this always overwrites any
+            # previously derived label (bulk-approve sets label from model prediction;
+            # individual review is the authoritative admin decision).
+            admin_label = 1 if is_malicious else 0
+            usq_stmt = (
+                update(UncertainSampleQueue)
+                .where(UncertainSampleQueue.scan_id == detection_id)
+                .values(admin_label=admin_label)
+            )
+            await session.execute(usq_stmt)
             await session.commit()
 
             logger.info(f"Admin {admin.username} reviewed detection {detection_id}: {review.admin_decision}")

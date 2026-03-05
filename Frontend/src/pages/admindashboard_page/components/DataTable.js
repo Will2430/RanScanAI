@@ -120,7 +120,7 @@ const DataTable = ({ data }) => {
                             <th style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => setSeveritySort(severitySort === 'desc' ? 'asc' : 'desc')}>
                                 Severity {severitySort === 'desc' ? '↓' : severitySort === 'asc' ? '↑' : '—'}
                             </th>
-                            <th>Prediction</th>
+                            <th>AI Prediction</th>
                             <th>Confidence</th>
                             <th>Date &amp; Time</th>
                         </tr>

@@ -442,7 +442,7 @@ textarea:focus {
 }
 
 strong{
-  color: #fff;
+  color: #000000;
 }
 
 @media (max-width: 768px) {
