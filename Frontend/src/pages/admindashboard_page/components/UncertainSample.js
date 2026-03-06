@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const ROWS_PER_PAGE = 10;
@@ -19,12 +19,7 @@ const UncertainSample = () => {
         return token ? { 'Authorization': 'Bearer ' + token } : {};
     }
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    useEffect(() => {
-        fetchUncertainSamples();
-    }, []);
-
-    const fetchUncertainSamples = async () => {
+    const fetchUncertainSamples = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
@@ -46,7 +41,11 @@ const UncertainSample = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [API_BASE]);
+
+    useEffect(() => {
+        fetchUncertainSamples();
+    }, [fetchUncertainSamples]);
 
     const handleBulkApprove = async () => {
         // Approve all samples currently visible in the filtered list
