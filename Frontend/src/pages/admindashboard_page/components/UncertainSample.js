@@ -19,6 +19,7 @@ const UncertainSample = () => {
         return token ? { 'Authorization': 'Bearer ' + token } : {};
     }
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         fetchUncertainSamples();
     }, []);

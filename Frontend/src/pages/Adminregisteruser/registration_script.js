@@ -8,8 +8,11 @@ if ('scrollRestoration' in history) {
     history.scrollRestoration = 'manual';
 }
 
-// Configuration
-const API_BASE_URL = 'http://localhost:8000';
+// Configuration — use the injected env var at build time (set in .env.production),
+// falling back to the production backend URL for direct HTML access.
+const API_BASE_URL = (typeof REACT_APP_API_BASE !== 'undefined' && REACT_APP_API_BASE)
+    ? REACT_APP_API_BASE
+    : 'https://ranscanai.azurewebsites.net';
 const CURRENT_STEP = { value: 1 };
 const TOTAL_STEPS = 2;
 

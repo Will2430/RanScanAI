@@ -20,7 +20,6 @@ function authHeaders() {
 const AdminDash = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [timeRange, setTimeRange] = useState('all');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [toast, setToast] = useState('');
