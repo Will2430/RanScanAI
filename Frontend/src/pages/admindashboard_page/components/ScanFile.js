@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback } from 'react';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
 
-const ScanFile = () => {
+const ScanFile = ({ onScanComplete }) => {
     const [file, setFile] = useState(null);
     const [scanning, setScanning] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -150,6 +150,7 @@ const ScanFile = () => {
                     setScanning(false);
                     es.close();
                     esRef.current = null;
+                    if (onScanComplete) onScanComplete();
 
                 } else if (msg.type === 'error') {
                     setAnalysisLogs(prev => [...prev, { text: msg.msg, status: 'error' }]);

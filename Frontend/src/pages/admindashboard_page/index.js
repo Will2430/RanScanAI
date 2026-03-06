@@ -172,7 +172,7 @@ const AdminDash = () => {
                                     <StatCard key={index} {...stat} />
                                 ))}
                             </div>
-                            <ScanFile />
+                            <ScanFile onScanComplete={fetchAdminData} />
                         </div>
 
                         {/* Charts Section */}
