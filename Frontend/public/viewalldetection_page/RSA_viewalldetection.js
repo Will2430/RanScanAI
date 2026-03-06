@@ -1,7 +1,7 @@
 // view all detections page — connected to backend API
 
 // ── Configuration ──────────────────────────────────────────────
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';   // Change if backend is hosted elsewhere
+const API_BASE = window.API_BASE || 'http://127.0.0.1:8000';   // Change if backend is hosted elsewhere
 
 // ── Auth helper ────────────────────────────────────────────────
 function authHeaders() {
