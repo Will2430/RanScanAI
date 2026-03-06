@@ -174,7 +174,7 @@ const ScanFile = ({ onScanComplete }) => {
             setProgress(0);
             setScanning(false);
         }
-    }, []);
+    }, [onScanComplete]);
 
     const handleFileSelect = (e) => {
         const f = e.target.files[0];
