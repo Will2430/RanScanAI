@@ -1,7 +1,9 @@
 // view all detections page — connected to backend API
 
 // ── Configuration ──────────────────────────────────────────────
-const API_BASE = window.API_BASE || 'http://127.0.0.1:8000';   // Change if backend is hosted elsewhere
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000'
+    : 'https://ranscanaix.azurewebsites.net';
 
 // ── Auth helper ────────────────────────────────────────────────
 function authHeaders() {
