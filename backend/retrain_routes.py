@@ -72,7 +72,7 @@ class ModelMetadataResponse(BaseModel):
     precision: Optional[float]
     recall: Optional[float]
     f1_score: Optional[float]
-    fpr: Optional[float]
+    fnr: Optional[float]
     auc: Optional[float]
     n_features: Optional[int]
     vocab_size: Optional[int]

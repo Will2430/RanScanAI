@@ -156,7 +156,7 @@
 
         // Redirect to login if not authenticated
         if (!localStorage.getItem('access_token')) {
-            window.location.href = '/login';
+            window.location.replace('/');
             return;
         }
 
@@ -185,7 +185,7 @@
                     if (res.status === 401) {
                         localStorage.removeItem('access_token');
                         localStorage.removeItem('user_data');
-                        window.location.href = '/login';
+                        window.location.replace('/');
                         return;
                     }
                     throw new Error(res.status === 404 ? 'Detection not found' : 'Failed to fetch detection');

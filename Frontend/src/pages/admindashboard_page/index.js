@@ -56,8 +56,8 @@ const AdminDash = () => {
         }
     }, [location.state]);
 
-    const fetchAdminData = async () => {
-        setLoading(true);
+    const fetchAdminData = async (silent = false) => {
+        if (!silent) setLoading(true);
         setError('');
         try {
             const res = await fetch(`${API_BASE}/api/detections/admin/stats`, {
@@ -172,7 +172,7 @@ const AdminDash = () => {
                                     <StatCard key={index} {...stat} />
                                 ))}
                             </div>
-                            <ScanFile onScanComplete={fetchAdminData} />
+                            <ScanFile onScanComplete={() => fetchAdminData(true)} />
                         </div>
 
                         {/* Charts Section */}
