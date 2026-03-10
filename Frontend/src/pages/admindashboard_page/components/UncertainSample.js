@@ -33,7 +33,12 @@ const UncertainSample = () => {
             }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            setSamples(data.detections || []);
+            const sorted = (data.detections || []).sort((a, b) => {
+                const ta = a.timestamp || a.date || '';
+                const tb = b.timestamp || b.date || '';
+                return tb.localeCompare(ta);
+            });
+            setSamples(sorted);
             setCurrentPage(1);
         } catch (err) {
             console.error('Failed to fetch uncertain samples:', err);

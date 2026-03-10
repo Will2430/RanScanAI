@@ -12,6 +12,7 @@ on:
 # TEMPORARILY DISABLED — remove the `if: false` line below to re-enable
 jobs:
   deploy:
+    if: false 
     runs-on: ubuntu-latest
     permissions:
       contents: read

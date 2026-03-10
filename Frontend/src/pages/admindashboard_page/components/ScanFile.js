@@ -199,6 +199,101 @@ const ScanFile = ({ onScanComplete }) => {
         setQuarantinedFiles(prev => prev.filter((_, i) => i !== index));
     };
 
+    // ── Log entry renderer (dark-background aware) ──────────────────────────
+    const renderLogEntry = (log, i, compact = true) => {
+        const text = log.text || '';
+        const fs = compact ? '0.95rem' : '1.05rem';
+
+        // Stage RESULT line — only when score/confidence present
+        const stageMatch = text.match(/stage\s*([\d.]+)[^:]*:\s*([A-Z_]+)(?:[^(]*\(([^)]*)\))?/i);
+        if (stageMatch) {
+            const stageNum  = stageMatch[1];
+            const verdict   = stageMatch[2].toUpperCase();
+            const extra     = stageMatch[3] || '';
+            const scoreM    = extra.match(/score\s*[=:]\s*([\d.]+)/i);
+            const confM     = extra.match(/conf(?:idence)?\s*[=:]\s*([\d.]+)/i);
+            const score     = scoreM ? parseFloat(scoreM[1]) : null;
+            const conf      = confM  ? parseFloat(confM[1])  : null;
+
+            if (score !== null || conf !== null) {
+                const isClean = /clean|benign|safe/i.test(verdict);
+                const isMal   = /malicious|malware|ransomware/i.test(verdict);
+                const accent  = isClean ? '#4ADE80' : isMal ? '#F87171' : '#FCD34D';
+                const bg      = isClean ? 'rgba(74,222,128,0.12)' : isMal ? 'rgba(248,113,113,0.12)' : 'rgba(252,211,77,0.12)';
+                return (
+                    <div key={i} style={{
+                        display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '7px',
+                        background: bg, borderLeft: `3px solid ${accent}`,
+                        borderRadius: '6px', padding: compact ? '8px 12px' : '11px 16px',
+                        marginBottom: '3px',
+                    }}>
+                        <span style={{ fontSize: compact ? '1.05rem' : '1.15rem' }}>
+                            {isClean ? '✅' : isMal ? '🚨' : '⚠️'}
+                        </span>
+                        <span style={{
+                            background: '#1E293B', color: '#94A3B8',
+                            borderRadius: '4px', padding: '2px 8px',
+                            fontSize: '0.80rem', fontWeight: 700, letterSpacing: '0.07em'
+                        }}>STAGE {stageNum}</span>
+                        <span style={{
+                            background: accent, color: '#0F172A',
+                            borderRadius: '4px', padding: '2px 10px',
+                            fontSize: compact ? '0.88rem' : '0.95rem', fontWeight: 800
+                        }}>{verdict}</span>
+                        {score !== null && (
+                            <span style={{ color: '#94A3B8', fontSize: '0.88rem', fontFamily: 'monospace' }}>score: <strong style={{ color: '#E2E8F0' }}>{score.toFixed(4)}</strong></span>
+                        )}
+                        {conf !== null && (
+                            <span style={{
+                                background: 'rgba(255,255,255,0.08)', color: accent,
+                                border: `1px solid ${accent}55`, borderRadius: '4px',
+                                padding: '2px 8px', fontSize: '0.88rem', fontWeight: 700
+                            }}>conf: {(conf * 100).toFixed(1)}%</span>
+                        )}
+                    </div>
+                );
+            }
+        }
+
+        // Soft voting line
+        if (/soft\s*vot/i.test(text)) {
+            return (
+                <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    background: 'rgba(139,92,246,0.12)', borderLeft: '3px solid #A78BFA',
+                    borderRadius: '6px', padding: compact ? '7px 12px' : '9px 16px', marginBottom: '3px'
+                }}>
+                    <span style={{ color: '#C4B5FD', fontSize: fs, fontFamily: 'monospace' }}>{text}</span>
+                </div>
+            );
+        }
+
+        // Final classification banner
+        if (/final\s*class/i.test(text)) {
+            const isMal  = /malicious|malware|ransomware/i.test(text);
+            const accent = isMal ? '#F87171' : '#4ADE80';
+            return (
+                <div key={i} style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    background: isMal ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)',
+                    border: `1.5px solid ${accent}`,
+                    borderRadius: '7px', padding: compact ? '10px 14px' : '13px 18px',
+                    marginTop: '6px', marginBottom: '2px'
+                }}>
+                    <span style={{ fontSize: compact ? '1.15rem' : '1.3rem' }}>{isMal ? '🚨' : '✅'}</span>
+                    <span style={{ color: accent, fontWeight: 700, fontSize: compact ? '1.0rem' : '1.1rem' }}>{text}</span>
+                </div>
+            );
+        }
+
+        // All other entries — plain text
+        return (
+            <div key={i} style={{ padding: compact ? '3px 12px' : '4px 14px', marginBottom: '1px' }}>
+                <span style={{ color: '#CBD5E1', fontSize: fs, lineHeight: 1.6 }}>{text}</span>
+            </div>
+        );
+    };
+
     return (
         <div className="scan-panel">
             {/* Left Column: Upload + Quarantine */}
@@ -311,14 +406,7 @@ const ScanFile = ({ onScanComplete }) => {
                                 </div>
                                 {showLogs && (
                                     <div className="scan-logs-list">
-                                        {analysisLogs.map((log, i) => (
-                                            <div key={i} className={`scan-log-entry scan-log-${log.status}`}>
-                                                <span className="scan-log-icon">
-                                                    {log.status === 'success' ? '✅' : log.status === 'warning' ? '⚠️' : '❌'}
-                                                </span>
-                                                <span>{log.text}</span>
-                                            </div>
-                                        ))}
+                                        {analysisLogs.map((log, i) => renderLogEntry(log, i, true))}
                                     </div>
                                 )}
                             </div>
@@ -353,14 +441,12 @@ const ScanFile = ({ onScanComplete }) => {
                         )}
 
                         <div className="logs-modal-body">
-                            {analysisLogs.map((log, i) => (
-                                <div key={i} className={`logs-modal-entry logs-modal-${log.status}`}>
-                                    <span className="logs-modal-icon">
-                                        {log.status === 'success' ? '✅' : log.status === 'warning' ? '⚠️' : '❌'}
-                                    </span>
-                                    <span>{log.text}{log.status === 'success' && log.text.includes('hash') && fileInfo ? ` (${fileInfo.hash})` : ''}</span>
-                                </div>
-                            ))}
+                            {analysisLogs.map((log, i) => {
+                                const entry = (log.status === 'success' && log.text.includes('hash') && fileInfo)
+                                    ? { ...log, text: `${log.text} (${fileInfo.hash})` }
+                                    : log;
+                                return renderLogEntry(entry, i, false);
+                            })}
 
                             {/* Behavioral patterns from DB */}
                             {scanResult?.is_malicious && behavioralPatterns.length > 0 && (
