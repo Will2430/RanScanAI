@@ -805,6 +805,33 @@ function scanAppendModalResult(bodyEl) {
         banner.textContent = 'Scan Completed\u00a0|\u00a0Model Confidence: ' + scanResult.confidence + '%';
     }
 
+    // Behavioral patterns
+    if (scanResult.is_malicious && scanBehavioralPatterns.length > 0) {
+        let pHtml = '<div class="logs-modal-warning-detail">' +
+            '<div class="logs-modal-entry logs-modal-warning">' +
+                '<span class="logs-modal-icon">⚠️</span>' +
+                '<span>Detected behavioral patterns (' + scanBehavioralPatterns.length + '):</span>' +
+            '</div>';
+        scanBehavioralPatterns.forEach(p => {
+            pHtml +=
+                '<div class="logs-modal-pattern-item">' +
+                    '<div class="logs-modal-pattern-title">' +
+                        '<code>' + p.label + '</code>' +
+                        (p.confidence ? '<span class="pattern-confidence">' + p.confidence + '</span>' : '') +
+                    '</div>' +
+                    '<p class="logs-modal-pattern-desc">' + p.description + '</p>' +
+                    (p.evidence.length > 0
+                        ? '<ul class="logs-modal-pattern-list">' +
+                          p.evidence.map(ev => '<li><code>' + ev + '</code></li>').join('') +
+                          '</ul>'
+                        : '') +
+                '</div>';
+        });
+        pHtml += '</div>';
+        body.innerHTML += pHtml;
+    }
+
+
     body.scrollTop = body.scrollHeight;
 
     // Footer
@@ -908,11 +935,59 @@ async function handleScan(selectedFile) {
                         confidence : (data.confidence * 100).toFixed(1) + '%',
                     });
                     scanRenderQuarantine();
-                }
 
-                const overlay = document.getElementById('logs-modal-overlay');
-                if (overlay && overlay.style.display !== 'none') {
-                    scanAppendModalResult(null);
+                    if (data.scan_id) {
+                        fetch(API_BASE + '/logs/scans/' + data.scan_id + '?include=behavioral_patterns', {
+                            headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+                        })
+                        .then(r => r.ok ? r.json() : null)
+                        .then(body => {
+                            if (body && body.behavioral_patterns && body.behavioral_patterns.length) {
+                                const raw = body.behavioral_patterns[0].raw_patterns;
+                                if (raw) {
+                                    scanBehavioralPatterns = Object.entries(raw)
+                                        .filter(([, v]) => v.detected)
+                                        .slice(0, 5)
+                                        .map(([k, v]) => {
+                                            const cf = parseFloat(v.confidence);
+                                            const confStr = !isNaN(cf)
+                                                ? (cf <= 1 ? (cf * 100).toFixed(0) + '%' : cf.toFixed(0) + '%')
+                                                : (v.confidence ? String(v.confidence).toUpperCase() : null);
+                                            return {
+                                                label       : k,
+                                                confidence  : confStr,
+                                                description : v.description || '',
+                                                evidence    : v.evidence || [],
+                                            };
+                                        });
+                                }
+                            }
+                            // Finalize modal now that patterns are loaded
+                            const overlay = document.getElementById('logs-modal-overlay');
+                            if (overlay && overlay.style.display !== 'none') {
+                                scanAppendModalResult(null);
+                            }
+                        })
+                        .catch(() => {
+                            // Finalize modal even if patterns fetch fails
+                            const overlay = document.getElementById('logs-modal-overlay');
+                            if (overlay && overlay.style.display !== 'none') {
+                                scanAppendModalResult(null);
+                            }
+                        });
+                    } else {
+                        // No scan_id — finalize modal now (no patterns to wait for)
+                        const overlay = document.getElementById('logs-modal-overlay');
+                        if (overlay && overlay.style.display !== 'none') {
+                            scanAppendModalResult(null);
+                        }
+                    }
+                } else {
+                    // Benign — no patterns fetch, finalize modal immediately
+                    const overlay = document.getElementById('logs-modal-overlay');
+                    if (overlay && overlay.style.display !== 'none') {
+                        scanAppendModalResult(null);
+                    }
                 }
 
                 scanRenderConfidence();
