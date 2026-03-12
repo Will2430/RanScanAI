@@ -1,0 +1,14 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/userdashboard_page/*",
+      "/viewalldetection_page/*",
+      "/viewalldetectiondetails_page/*",
+      "/viewallreports_page/*",
+      "/viewlatestdetectiondetails_page/*",
+      "/userprofile_page/*",
+      "/*.{png,jpg,jpeg,gif,svg,ico,css,js,woff,woff2,ttf,eot,json,html,txt,map}"
+    ]
+  }
+}
