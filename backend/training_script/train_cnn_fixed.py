@@ -712,7 +712,7 @@ def main():
     STRATEGY = 'NO_WEIGHTS'  # Options: 'SMOTE', 'BALANCED_DATASET', 'MODERATE_WEIGHTS', 'NO_WEIGHTS'
     
     trainer = FixedCNNTrainer(KAGGLE_DIR, MALBEHAVD_PATH, strategy=STRATEGY)
-    trainer.train(epochs=1, batch_size=64)  # 64 cuts epoch time ~40% vs 32
+    trainer.train(epochs=10, batch_size=64)  # 64 cuts epoch time ~40% vs 32
     metrics = trainer.evaluate()
     print(f"Accuracy: {metrics['accuracy']:.2%}")
     print(f"AUC-ROC: {metrics['auc']:.4f}")

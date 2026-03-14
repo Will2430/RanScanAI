@@ -1,0 +1,25 @@
+{
+  "accuracy": 0.9737588763237,
+  "precision": 0.9992755651473999,
+  "recall": 0.9982832670211792,
+  "auc": 0.9707846641540527,
+  "f1_score": 0.9987791696195658,
+  "fpr": 0.009433962264150943,
+  "fnr": 0.02921535893155259,
+  "confusion_matrix": [
+    [
+      210,
+      2
+    ],
+    [
+      35,
+      1163
+    ]
+  ],
+  "n_features": 3000,
+  "vocab_size": 391,
+  "model_type": "1D CNN",
+  "dataset": "Zenodo",
+  "timestamp": "2026-03-09T22:03:20.056229",
+  "path_to_model": "C:\\Users\\willi\\OneDrive\\Test\\K\\models\\best_fixed_cnn_20260309_202754.keras"
+}

@@ -210,7 +210,7 @@ else:
     logger.warning(f"✗ Complete analyzer not found: {VM_ANALYZER_SCRIPT}")
 
 
-def run_complete_analysis(file_path: str, timeout: int = 180) -> Optional[dict]:
+def run_complete_analysis(file_path: str, timeout: int = 300) -> Optional[dict]:
     """
     Run vm_complete_analyzer.py as subprocess (SANDBOX EXECUTION)
     
@@ -220,7 +220,7 @@ def run_complete_analysis(file_path: str, timeout: int = 180) -> Optional[dict]:
     
     Args:
         file_path: Path to executable
-        timeout: Max execution time (default 150s for full analysis + Frida)
+        timeout: Max execution time (default 300s for full analysis + Frida)
         
     Returns:
         Dict from complete_analysis.json or None if failed
@@ -313,7 +313,7 @@ def run_complete_analysis(file_path: str, timeout: int = 180) -> Optional[dict]:
         latest_analysis = max(analysis_files, key=lambda p: p.stat().st_mtime)
         logger.info(f"Loading analysis from: {latest_analysis.name}")
         
-        with open(latest_analysis, 'r') as f:
+        with open(latest_analysis, 'r', encoding='utf-8') as f:
             complete_data = json.load(f)
         
         logger.info(f"✅ Complete analysis loaded:")
@@ -333,7 +333,7 @@ def run_complete_analysis(file_path: str, timeout: int = 180) -> Optional[dict]:
             if analysis_files:
                 latest_analysis = max(analysis_files, key=lambda p: p.stat().st_mtime)
                 logger.info(f"✓ Partial analysis found: {latest_analysis.name}")
-                with open(latest_analysis, 'r') as f:
+                with open(latest_analysis, 'r', encoding='utf-8') as f:
                     return json.load(f)
         logger.warning("✗ No analysis results found after timeout")
         return None
@@ -588,7 +588,7 @@ def extract_api_sequence(json_file_path):
         """
         logger.info(f"\nExtracting API calls from {json_file_path}...")
         
-        with open(json_file_path, 'r') as f:
+        with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         api_calls = []
@@ -755,12 +755,12 @@ async def _load_active_models():
 
         features_path = models_dir / f"features_xgb_{timestamp}.json"
         if features_path.exists():
-            with open(features_path) as f:
+            with open(features_path, encoding='utf-8') as f:
                 model_feature_names = json.load(f)
 
         metadata_path = models_dir / f"xgboost_metadata_{timestamp}.json"
         if metadata_path.exists():
-            with open(metadata_path) as f:
+            with open(metadata_path, encoding='utf-8') as f:
                 model_metadata = json.load(f)
             logger.info(f"✓ XGBoost metadata loaded (acc={model_metadata.get('performance',{}).get('accuracy','?')})")
     else:
@@ -826,7 +826,7 @@ async def _load_active_models():
 
         cnn_meta_files = sorted(models_dir.glob(f"cnn_fixed_metadata_{cnn_timestamp}.json"))
         if cnn_meta_files:
-            with open(cnn_meta_files[0]) as f:
+            with open(cnn_meta_files[0], encoding='utf-8') as f:
                 cnn_metadata = json.load(f)
             logger.info(f"✓ CNN metadata loaded (acc={cnn_metadata.get('accuracy','?')})")
 
@@ -1233,7 +1233,7 @@ async def predict_staged(
                 _f.write(file_bytes)
 
             yield _emit({"type": "log", "msg": "   ⏳ Sandbox running (this may take 3-10 minutes)..."})
-            complete_data = await asyncio.to_thread(run_complete_analysis, tmp_path, 180)
+            complete_data = await asyncio.to_thread(run_complete_analysis, tmp_path, 300)
 
             if not complete_data:
                 yield _emit({"type": "log", "msg": "⚠️  Sandbox failed — falling back to Stage 1 result"})

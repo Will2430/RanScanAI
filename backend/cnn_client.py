@@ -6,11 +6,16 @@ Use this in Python 3.14 project to call the CNN model service running in Python 
 import requests
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Any
 import time
 
 logger = logging.getLogger(__name__)
+
+# Read from env var so Azure App Service uses CNN_MODEL_SERVICE_URL automatically.
+# Falls back to the Tailscale IP for local development.
+_DEFAULT_SERVICE_URL = os.environ.get("CNN_MODEL_SERVICE_URL", "http://100.73.153.23:8001")
 
 
 class CNNModelClient:
@@ -19,7 +24,7 @@ class CNNModelClient:
     Acts as a drop-in replacement for CNNMalwareDetector but makes HTTP calls
     """
     
-    def __init__(self, service_url: str = "http://127.0.0.1:8001", timeout: int = 30, use_staged: bool = False):
+    def __init__(self, service_url: str = _DEFAULT_SERVICE_URL, timeout: int = 30, use_staged: bool = False):
         """
         Initialize CNN model client
         

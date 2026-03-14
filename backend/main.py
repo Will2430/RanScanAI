@@ -49,6 +49,7 @@ except ImportError as e:
     logger.debug(f"Could not import from migration_package.cnn_client: {e}")
 
 from vt_integration import VirusTotalEnricher
+import local_inference
 
 # Import authentication router
 try:
@@ -105,12 +106,8 @@ except Exception as e:
     retrain_router = None
 
 # Configuration
-# Toggle between Traditional ML and CNN model
-USE_CNN_MODEL = os.getenv("USE_CNN_MODEL", "false").lower() == "true"  # Set to "true" to enable CNN
 CNN_MODEL_SERVICE_URL = os.getenv("CNN_MODEL_SERVICE_URL", "http://100.73.153.23:8001")
-
-# OR override directly (uncomment to use):
-USE_CNN_MODEL = True  # Change this to True to use CNN model
+CNN_MODEL_SERVICE_URL_2 = os.getenv("CNN_MODEL_SERVICE_URL_2", "")  # fallback (e.g. laptop IP)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -157,8 +154,8 @@ else:
     logger.warning("⚠️ Retrain routes NOT registered")
 
 # Global instances
-detector: Optional[MalwareDetector] = None
-cnn_detector: Optional[CNNModelClient] = None  # Now using HTTP client
+detector: Optional[MalwareDetector] = None  # kept for compatibility; always None in production
+cnn_detector: Optional[CNNModelClient] = None
 vt_enricher: Optional[VirusTotalEnricher] = None
 
 # In-memory job store: job_id → asyncio.Queue
@@ -234,44 +231,76 @@ async def startup_event():
     
     logger.info("🚀 Starting SecureGuard Backend...")
     
-    try:
-        # Choose model based on configuration
-        if USE_CNN_MODEL and CNNModelClient is not None:
-            logger.info("Connecting to CNN model service...")
-            try:
-                # Connect to model service (runs in Python 3.10 with TensorFlow)
-                cnn_detector = CNNModelClient(service_url=CNN_MODEL_SERVICE_URL)
-                logger.info(f"✓ Connected to CNN model service at {CNN_MODEL_SERVICE_URL}")
-                logger.info(f"  Model type: 1D CNN (via HTTP)")
-            except Exception as e:
-                logger.warning(f"Failed to connect to CNN service: {e}")
-                logger.info("Falling back to traditional ML model...")
-                detector = MalwareDetector()
-                logger.info(f"✓ Traditional ML model loaded ({detector.model_size_mb:.2f} MB)")
+    global CNN_MODEL_SERVICE_URL, cnn_detector
+
+    async def _reachable(url: str) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                r = await client.get(f"{url}/health")
+                return r.status_code == 200
+        except Exception:
+            return False
+
+    candidates = [u for u in [CNN_MODEL_SERVICE_URL, CNN_MODEL_SERVICE_URL_2] if u]
+    resolved_url = None
+    for url in candidates:
+        logger.info(f"  Trying CNN service at {url} ...")
+        if await _reachable(url):
+            resolved_url = url
+            logger.info(f"  ✓ Reachable: {url}")
+            break
+        logger.warning(f"  ✗ {url} unreachable, trying next...")
+
+    if resolved_url is not None:
+        CNN_MODEL_SERVICE_URL = resolved_url
+        cnn_detector = CNNModelClient(service_url=resolved_url)
+        logger.info(f"✅ SecureGuard Backend ready! CNN service: {resolved_url}")
+    else:
+        logger.warning(f"  ✗ No remote CNN service reachable (tried: {candidates}) — loading local models")
+        ok = local_inference.load_models()
+        if ok:
+            logger.info("✅ SecureGuard Backend ready! Running in LOCAL model mode (Stage 1 XGBoost only)")
         else:
-            # Initialize traditional ML detector
-            if USE_CNN_MODEL and CNNModelClient is None:
-                logger.warning("CNN client not available - using traditional model")
-            logger.info("Loading traditional ML model...")
-            detector = MalwareDetector()
-            logger.info(f"✓ Model loaded successfully ({detector.model_size_mb:.2f} MB)")
-        
-        # Note: VT enrichment is now handled by model_service in staged analysis
-        # Only initialize local VT enricher if using traditional ML model
-        if detector and not cnn_detector:
-            logger.info("Initializing VirusTotal enricher...")
-            try:
-                vt_enricher = VirusTotalEnricher()
-                logger.info("✓ VirusTotal enricher ready")
-            except Exception as e:
-                logger.warning(f"VT enricher not available: {e}")
-        
-        logger.info("✅ SecureGuard Backend ready!")
-        logger.info(f"   Model type: {'CNN' if cnn_detector else 'Traditional ML'}")
-        
-    except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
-        raise
+            logger.warning("⚠️  Local models also unavailable — scan endpoints will return 503")
+
+
+@app.post("/reload-cnn-service")
+async def reload_cnn_service():
+    """
+    Re-probe CNN_MODEL_SERVICE_URL / CNN_MODEL_SERVICE_URL_2 and switch mode.
+    Call this after starting model_service on your home PC so the container
+    picks it up without restarting.
+    """
+    global CNN_MODEL_SERVICE_URL, cnn_detector
+
+    async def _reachable(url: str) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                r = await client.get(f"{url}/health")
+                return r.status_code == 200
+        except Exception:
+            return False
+
+    candidates = [
+        u for u in [
+            os.getenv("CNN_MODEL_SERVICE_URL", ""),
+            os.getenv("CNN_MODEL_SERVICE_URL_2", ""),
+        ] if u
+    ]
+
+    for url in candidates:
+        if await _reachable(url):
+            CNN_MODEL_SERVICE_URL = url
+            cnn_detector = CNNModelClient(service_url=url)
+            logger.info(f"[reload-cnn-service] Switched to remote CNN service: {url}")
+            return {"status": "remote", "url": url}
+
+    # No remote reachable — make sure local models are loaded
+    CNN_MODEL_SERVICE_URL = ""
+    cnn_detector = None
+    if not local_inference.is_loaded():
+        local_inference.load_models()
+    return {"status": "local", "loaded": local_inference.is_loaded()}
 
 
 @app.get("/")
@@ -590,32 +619,36 @@ async def proxy_predict_staged(
 
     async def run_scan():
         try:
-            await queue.put({"type": "log", "msg": f"🔍 Submitting '{filename}' to model service..."})
-
-            async with httpx.AsyncClient(timeout=660.0) as client:
-                async with client.stream(
-                    "POST",
-                    f"{CNN_MODEL_SERVICE_URL}/predict/staged",
-                    params={"run_sandbox": str(run_sandbox).lower(), "user_id": user_id},
-                    files={"file": (filename, file_bytes, "application/octet-stream")},
-                ) as response:
-                    if response.status_code != 200:
-                        body = await response.aread()
-                        await queue.put({"type": "error", "msg": body.decode(), "status": response.status_code})
-                        return
-                    async for line in response.aiter_lines():
-                        if not line.startswith("data:"):
-                            continue
-                        raw = line[5:].strip()
-                        if not raw:
-                            continue
-                        try:
-                            msg = json.loads(raw)
-                        except Exception:
-                            continue
-                        await queue.put(msg)
-                        if msg.get("type") in ("result", "error"):
-                            break
+            if cnn_detector is not None:
+                # ── Remote model_service path ──────────────────────────────
+                await queue.put({"type": "log", "msg": f"🔍 Submitting '{filename}' to model service at {CNN_MODEL_SERVICE_URL}..."})
+                async with httpx.AsyncClient(timeout=660.0) as client:
+                    async with client.stream(
+                        "POST",
+                        f"{CNN_MODEL_SERVICE_URL}/predict/staged",
+                        params={"run_sandbox": str(run_sandbox).lower(), "user_id": user_id},
+                        files={"file": (filename, file_bytes, "application/octet-stream")},
+                    ) as response:
+                        if response.status_code != 200:
+                            body = await response.aread()
+                            await queue.put({"type": "error", "msg": body.decode(), "status": response.status_code})
+                            return
+                        async for line in response.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            raw = line[5:].strip()
+                            if not raw:
+                                continue
+                            try:
+                                msg = json.loads(raw)
+                            except Exception:
+                                continue
+                            await queue.put(msg)
+                            if msg.get("type") in ("result", "error"):
+                                break
+            else:
+                # ── Local fallback path (model_service unreachable) ────────
+                await local_inference.run_staged(file_bytes, filename, queue)
 
         except Exception as e:
             await queue.put({"type": "error", "msg": str(e), "status": 500})
@@ -681,7 +714,7 @@ async def stream_scan_result(
 # tells model_service to hot-reload via POST http://localhost:8001/reload-model.
 # ==============================================================================
 
-CNN_SERVICE_URL_BASE = os.getenv("CNN_MODEL_SERVICE_URL", "http://127.0.0.1:8001")
+CNN_SERVICE_URL_BASE = CNN_MODEL_SERVICE_URL  # updated at startup to resolved URL
 
 
 @app.get("/api/models/versions")
@@ -791,7 +824,7 @@ async def set_active_model_version(
     reload_msg = ""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(f"{CNN_SERVICE_URL_BASE}/reload-model")
+            resp = await client.post(f"{CNN_MODEL_SERVICE_URL}/reload-model")
         reload_ok  = resp.status_code == 200
         reload_msg = resp.json().get("message", "") if reload_ok else f"HTTP {resp.status_code}"
     except Exception as exc:
