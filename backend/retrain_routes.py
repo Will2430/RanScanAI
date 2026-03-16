@@ -72,7 +72,7 @@ class ModelMetadataResponse(BaseModel):
     precision: Optional[float]
     recall: Optional[float]
     f1_score: Optional[float]
-    fpr: Optional[float]
+    fnr: Optional[float]
     auc: Optional[float]
     n_features: Optional[int]
     vocab_size: Optional[int]
@@ -103,7 +103,7 @@ class ModelVersionItem(BaseModel):
     precision: Optional[float]
     recall: Optional[float]
     f1_score: Optional[float]
-    fpr: Optional[float]
+    fnr: Optional[float]
     auc: Optional[float]
     samples_added: Optional[int]
     accuracy_delta: Optional[float]
@@ -186,7 +186,7 @@ async def get_model_metadata(
                 precision=row.precision,
                 recall=row.recall,
                 f1_score=row.f1_score,
-                fpr=row.fpr,
+                fnr=row.fnr,
                 auc=row.auc,
                 n_features=row.n_features,
                 vocab_size=row.vocab_size,
@@ -220,7 +220,7 @@ async def list_model_versions(
                     precision=r.precision,
                     recall=r.recall,
                     f1_score=r.f1_score,
-                    fpr=r.fpr,
+                    fnr=r.fnr,
                     auc=r.auc,
                     samples_added=r.samples_added,
                     accuracy_delta=r.accuracy_delta,
@@ -260,7 +260,7 @@ async def get_model_metadata_by_id(
                 precision=row.precision,
                 recall=row.recall,
                 f1_score=row.f1_score,
-                fpr=row.fpr,
+                fnr=row.fnr,
                 auc=row.auc,
                 n_features=row.n_features,
                 vocab_size=row.vocab_size,
@@ -444,7 +444,7 @@ async def _run_retrain_background(triggered_by: str, sample_count: int):
                     precision=cnn_meta.get("precision"),
                     recall=cnn_meta.get("recall"),
                     f1_score=cnn_meta.get("f1_score"),
-                    fpr=cnn_meta.get("fpr"),
+                    fnr=cnn_meta.get("fnr"),
                     auc=cnn_meta.get("auc"),
                     n_features=cnn_meta.get("n_features"),
                     vocab_size=cnn_meta.get("vocab_size"),
@@ -476,6 +476,7 @@ async def _run_retrain_background(triggered_by: str, sample_count: int):
                     dataset=xgb_meta.get("dataset", "Zenodo"),
                     auc=perf.get("roc_auc"),
                     n_features=xgb_meta.get("n_features"),
+                    fnr=xgb_meta.get("fnr"),
                     notes=f"{notes_base} [XGBoost]",
                     samples_added=sample_count,
                     accuracy_delta=acc_delta,

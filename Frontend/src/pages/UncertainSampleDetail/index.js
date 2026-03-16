@@ -259,9 +259,62 @@ const UncertainSampleDetail = () => {
                                 </div>
                                 <div style={cell}>
                                     <div style={label}>VirusTotal Detection</div>
-                                    <div style={val}>{detail.vt_detection_ratio || 'Not available'}</div>
+                                    <div style={val}>{detail.feedback_vt_detection_ratio || detail.vt_detection_ratio || 'Not available'}</div>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* Dedicated VT feedback section (feedback_samples by scan_id) */}
+                        <div style={card}>
+                            <h3 style={{ margin: '0 0 16px', color: '#333', fontSize: '1.05rem' }}>🧪 VirusTotal Feedback Result</h3>
+
+                            {(detail.feedback_vt_detections != null || detail.feedback_vt_detection_ratio || detail.feedback_vt_family || detail.feedback_vt_threat_label) ? (
+                                <>
+                                    <div style={row}>
+                                        <div style={cell}>
+                                            <div style={label}>Detections</div>
+                                            <div style={val}>{detail.feedback_vt_detections ?? '—'}</div>
+                                        </div>
+                                        <div style={cell}>
+                                            <div style={label}>Detection Ratio</div>
+                                            <div style={val}>{detail.feedback_vt_detection_ratio || '—'}</div>
+                                        </div>
+                                        <div style={cell}>
+                                            <div style={label}>Family</div>
+                                            <div style={val}>{detail.feedback_vt_family || 'Unknown'}</div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ ...row, marginTop: '16px' }}>
+                                        <div style={cell}>
+                                            <div style={label}>Threat Label</div>
+                                            <div style={val}>{detail.feedback_vt_threat_label || 'Unknown'}</div>
+                                        </div>
+                                        <div style={cell}>
+                                            <div style={label}>Mismatch Type</div>
+                                            <div style={val}>{detail.feedback_mismatch_type || '—'}</div>
+                                        </div>
+                                        <div style={cell}>
+                                            <div style={label}>Severity</div>
+                                            <div style={val}>{detail.feedback_severity || '—'}</div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ ...row, marginTop: '16px' }}>
+                                        <div style={{ flex: '1 1 100%' }}>
+                                            <div style={label}>Feedback Timestamp</div>
+                                            <div style={val}>{detail.feedback_timestamp || '—'}</div>
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div style={{
+                                    padding: '14px 16px', borderRadius: '8px',
+                                    background: '#f9fafb', color: '#6b7280', fontSize: '0.92rem',
+                                }}>
+                                    No feedback_samples entry is linked to this scan yet.
+                                </div>
+                            )}
                         </div>
 
                         {/* Admin review info */}

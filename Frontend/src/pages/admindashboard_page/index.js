@@ -19,7 +19,6 @@ function authHeaders() {
 const AdminDash = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [timeRange, setTimeRange] = useState('all');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [toast, setToast] = useState('');
@@ -56,8 +55,8 @@ const AdminDash = () => {
         }
     }, [location.state]);
 
-    const fetchAdminData = async () => {
-        setLoading(true);
+    const fetchAdminData = async (silent = false) => {
+        if (!silent) setLoading(true);
         setError('');
         try {
             const res = await fetch(`${API_BASE}/api/detections/admin/stats`, {
@@ -169,7 +168,7 @@ const AdminDash = () => {
                                     <StatCard key={index} {...stat} />
                                 ))}
                             </div>
-                            <ScanFile />
+                            <ScanFile onScanComplete={() => fetchAdminData(true)} />
                         </div>
 
                         {/* Charts Section */}

@@ -69,7 +69,7 @@ const AdminRegisterUser = () => {
     const [showPw, setShowPw] = useState(false);
     const [showConfirmPw, setShowConfirmPw] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [successMsg, setSuccessMsg] = useState(null);
+    const [, setSuccessMsg] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
 
     const pickerRef = useRef(null);

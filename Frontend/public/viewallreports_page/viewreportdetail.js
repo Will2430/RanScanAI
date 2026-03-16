@@ -2,7 +2,9 @@
 // RanScanAI  Report Detail / Preview — JavaScript
 // ============================================================
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000'
+    : 'https://ranscanaix.azurewebsites.net';
 
 // Auth helper
 function authHeaders() {
@@ -411,7 +413,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-        const res = await fetch(`${API_BASE_URL}/api/reports/${year}/${month}`, { headers: authHeaders() });
+        const res = await fetch(`${API_BASE}/api/reports/${year}/${month}`, { headers: authHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const apiData = await res.json();
 
@@ -431,7 +433,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
         console.error('Failed to load report:', err);
         document.getElementById('report-title').textContent = 'Could not load report from server.';
-        document.getElementById('report-period').textContent = 'Make sure the backend is running at ' + API_BASE_URL;
+        document.getElementById('report-period').textContent = 'Make sure the backend is running at ' + API_BASE;
     }
 
     // Auto-print if opened with ?print=1 (from download button on report list)

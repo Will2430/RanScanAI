@@ -1136,53 +1136,77 @@ body {
 .logs-modal-success { color: #86EFAC; }
 
 .logs-modal-warning-detail {
-    margin: 8px 20px;
-    border: 1px solid #334155;
-    border-radius: 6px;
-    overflow: hidden;
+    margin-top: 4px;
 }
 
 .logs-modal-pattern-item {
-    padding: 8px 14px;
-    border-top: 1px solid #334155;
+    margin: 8px 0 4px 20px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border-left: 3px solid rgba(250, 204, 21, 0.5);
+    border-radius: 0 6px 6px 0;
 }
 
 .logs-modal-pattern-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     margin-bottom: 4px;
 }
 
-.logs-modal-pattern-title code { color: #93C5FD; font-size: .75rem; }
+.logs-modal-pattern-title code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.88rem;
+    color: #FACC15;
+    font-weight: 700;
+}
 
 .pattern-confidence {
-    font-size: .68rem;
-    background: #1E3A5F;
-    color: #93C5FD;
-    padding: 1px 6px;
-    border-radius: 999px;
-    font-weight: 600;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: rgba(200, 58, 43, 0.25);
+    color: #ff8a7a;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .logs-modal-pattern-desc {
-    font-size: .72rem;
-    color: #94A3B8;
-    margin-bottom: 4px;
-    font-family: var(--font);
+    margin: 4px 0 6px 0;
+    font-size: 0.88rem;
+    color: #b0b0b0;
+    font-weight: 400;
+    line-height: 1.55;
 }
 
 .logs-modal-pattern-list {
-    list-style: none;
+    list-style: disc;
+    margin: 8px 0 8px 32px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding-left: 12px;
+    gap: 10px;
+}
+
+.logs-modal-pattern-list li {
+    color: #ccc;
+    font-size: 0.92rem;
+    font-weight: 500;
+    line-height: 1.65;
 }
 
 .logs-modal-pattern-list li code {
-    font-size: .68rem;
-    color: #FDE68A;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.88rem;
+    color: #e8e8e8;
+    word-break: break-all;
 }
 
 .logs-modal-classification {

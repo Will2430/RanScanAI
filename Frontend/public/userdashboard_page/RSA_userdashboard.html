@@ -224,7 +224,7 @@
         const token = localStorage.getItem('access_token');
         if (!token) {
             // Not logged in — redirect to login page
-            window.location.href = '/login';
+            window.location.replace('/');
             return;
         }
 
@@ -243,7 +243,7 @@
             logoutBtn.addEventListener('click', function() {
                 localStorage.removeItem('access_token');
                 localStorage.removeItem('user_data');
-                window.location.href = '/login';
+                window.location.replace('/');
             });
         }
     })();

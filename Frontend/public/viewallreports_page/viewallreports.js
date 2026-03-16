@@ -1,6 +1,8 @@
 // view all reports page — connected to backend API
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000'
+    : 'https://ranscanaix.azurewebsites.net';
 
 // Auth helper
 function authHeaders() {
@@ -13,7 +15,7 @@ async function fetchReports() {
     tbody.innerHTML = `<tr><td colspan="2" style="text-align:center;padding:32px;color:#8B92A8;">Loading reports…</td></tr>`;
 
     try {
-        const res = await fetch(`${API_BASE_URL}/api/reports?limit=60`, { headers: authHeaders() });
+        const res = await fetch(`${API_BASE}/api/reports?limit=60`, { headers: authHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const reports = data.reports || [];
@@ -60,7 +62,7 @@ async function fetchReports() {
             <tr>
                 <td colspan="2" style="text-align:center;padding:32px;color:#C83A2B;">
                     Could not connect to the server.<br>
-                    <small style="color:#8B92A8;">Make sure the backend is running at ${API_BASE_URL}</small>
+                    <small style="color:#8B92A8;">Make sure the backend is running at ${API_BASE}</small>
                 </td>
             </tr>
         `;

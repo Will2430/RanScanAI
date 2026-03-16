@@ -268,7 +268,7 @@
 				// Token expired — redirect to login
 				localStorage.removeItem('access_token');
 				localStorage.removeItem('user_data');
-				window.location.href = '/login';
+				window.location.replace('/');
 			}
 		} catch (err) {
 			console.warn('Could not fetch fresh profile:', err);
@@ -367,7 +367,7 @@
 			if (!oldPw) return;
 
 			const token = localStorage.getItem('access_token');
-			if (!token) { window.location.href = '/login'; return; }
+			if (!token) { window.location.replace('/'); return; }
 
 			verifyBtn.querySelector('.btn-text').style.display = 'none';
 			verifyBtn.querySelector('.btn-spinner').style.display = '';
@@ -486,7 +486,7 @@
 			if (newPw !== confirmInput.value) return;
 
 			const token = localStorage.getItem('access_token');
-			if (!token) { window.location.href = '/login'; return; }
+			if (!token) { window.location.replace('/'); return; }
 
 			changeError.style.display = 'none';
 			changeSuccess.style.display = 'none';

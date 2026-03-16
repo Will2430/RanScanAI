@@ -14,7 +14,7 @@ from datetime import datetime
 import logging
 
 from db_manager import (
-    get_session_maker, get_session, ScanHistory, User, UncertainSampleQueue,
+    get_session_maker, get_session, ScanHistory, User, UncertainSampleQueue, FeedbackSamples,
     get_uncertain_samples_with_vt_status, bulk_approve_uncertain_samples,
 )
 from auth.routes import get_current_user, get_current_admin
@@ -343,6 +343,14 @@ class AdminDetectionDetailResponse(BaseModel):
     role: Optional[str] = None
     # VT data
     vt_detection_ratio: Optional[str] = None
+    # VT feedback from feedback_samples (latest row by scan_id)
+    feedback_vt_detections: Optional[int] = None
+    feedback_vt_detection_ratio: Optional[str] = None
+    feedback_vt_family: Optional[str] = None
+    feedback_vt_threat_label: Optional[str] = None
+    feedback_mismatch_type: Optional[str] = None
+    feedback_severity: Optional[str] = None
+    feedback_timestamp: Optional[str] = None
     # Admin review
     admin_review: bool = False
     admin_decision_date: Optional[str] = None
@@ -378,6 +386,16 @@ async def get_admin_detection_detail(
             if not row:
                 raise HTTPException(status_code=404, detail="Detection not found")
 
+            # Pull the newest VT feedback row linked by scan_id, if it exists.
+            fb_stmt = (
+                select(FeedbackSamples)
+                .where(FeedbackSamples.scan_id == row.id)
+                .order_by(FeedbackSamples.timestamp.desc())
+                .limit(1)
+            )
+            fb_result = await session.execute(fb_stmt)
+            fb = fb_result.scalar_one_or_none()
+
             return AdminDetectionDetailResponse(
                 id=row.id,
                 file_name=row.file_name,
@@ -395,6 +413,13 @@ async def get_admin_detection_detail(
                 username=row.user.username if row.user else None,
                 role=row.user.role if row.user else None,
                 vt_detection_ratio=row.vt_detection_ratio,
+                feedback_vt_detections=fb.vt_detections if fb else None,
+                feedback_vt_detection_ratio=fb.vt_detection_ratio if fb else None,
+                feedback_vt_family=fb.vt_family if fb else None,
+                feedback_vt_threat_label=fb.vt_threat_label if fb else None,
+                feedback_mismatch_type=fb.mismatch_type if fb else None,
+                feedback_severity=fb.severity if fb else None,
+                feedback_timestamp=fb.timestamp.isoformat() if fb and fb.timestamp else None,
                 admin_review=row.admin_review,
                 admin_decision_date=row.admin_decision_date.isoformat() if row.admin_decision_date else None,
             )

@@ -148,7 +148,9 @@
     // Fetch & render the latest detection for the logged-in user
     // ============================================================
     (function () {
-        const API_BASE = 'http://127.0.0.1:8000';
+        const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? 'http://127.0.0.1:8000'
+            : 'https://ranscanaix.azurewebsites.net';
 
         function authHeaders() {
             const token = localStorage.getItem('access_token');
@@ -157,7 +159,7 @@
 
         // Redirect to login if not authenticated
         if (!localStorage.getItem('access_token')) {
-            window.location.href = '/login';
+            window.location.replace('/');
             return;
         }
 
@@ -225,7 +227,7 @@
         function clearAuthAndRedirect() {
             localStorage.removeItem('access_token');
             localStorage.removeItem('user_data');
-            window.location.href = '/login';
+            window.location.replace('/');
         }
 
         fetchDetection();

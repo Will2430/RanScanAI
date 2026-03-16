@@ -7,7 +7,7 @@
 (function () {
     'use strict';
 
-    const API_BASE = 'http://127.0.0.1:8000';
+    const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
     const MAX_ITEMS = 8;
 
     /* ── Auth helper ──────────────────────────────── */

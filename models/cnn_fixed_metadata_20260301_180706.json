@@ -1,0 +1,24 @@
+{
+  "accuracy": 0.936170220375061,
+  "precision": 0.9953204393386841,
+  "recall": 0.9964157938957214,
+  "auc": 0.9282137155532837,
+  "f1_score": 0.9958678154222992,
+  "fpr": 0.018867924528301886,
+  "fnr": 0.07178631051752922,
+  "confusion_matrix": [
+    [
+      208,
+      4
+    ],
+    [
+      86,
+      1112
+    ]
+  ],
+  "n_features": 3000,
+  "vocab_size": 390,
+  "model_type": "1D CNN",
+  "dataset": "MelbehaveD-v1 + Kaggle API Calls",
+  "timestamp": "2026-03-01T18:55:48.528200"
+}

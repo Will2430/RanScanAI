@@ -1,7 +1,9 @@
 // app.js
 
 // --- API Configuration ---
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://127.0.0.1:8000'
+    : 'https://ranscanaix.azurewebsites.net';
 
 // --- Auth helper ---
 function authHeaders() {
@@ -614,18 +616,71 @@ function scanSetProgress(pct) {
     }
 }
 
+function scanRenderLogEntry(log) {
+    var text = log.text || '';
+
+    // Stage RESULT line — only when score/confidence present
+    var stageMatch = text.match(/stage\s*([\d.]+)[^:]*:\s*([A-Z_]+)(?:[^(]*\(([^)]*)\))?/i);
+    if (stageMatch) {
+        var stageNum = stageMatch[1];
+        var verdict  = stageMatch[2].toUpperCase();
+        var extra    = stageMatch[3] || '';
+        var scoreM   = extra.match(/score\s*[=:]\s*([\d.]+)/i);
+        var confM    = extra.match(/conf(?:idence)?\s*[=:]\s*([\d.]+)/i);
+        var score    = scoreM ? parseFloat(scoreM[1]) : null;
+        var conf     = confM  ? parseFloat(confM[1])  : null;
+        if (score !== null || conf !== null) {
+            var isClean  = /clean|benign|safe/i.test(verdict);
+            var isMal    = /malicious|malware|ransomware/i.test(verdict);
+            var accent   = isClean ? '#4ADE80' : isMal ? '#F87171' : '#FCD34D';
+            var bg       = isClean ? 'rgba(74,222,128,0.12)' : isMal ? 'rgba(248,113,113,0.12)' : 'rgba(252,211,77,0.12)';
+            var emoji    = isClean ? '✅' : isMal ? '🚨' : '⚠️';
+            var scoreHtml = score !== null
+                ? '<span style="color:#94A3B8;font-size:0.88rem;font-family:monospace">score: <strong style="color:#E2E8F0">' + score.toFixed(4) + '</strong></span>'
+                : '';
+            var confHtml  = conf !== null
+                ? '<span style="background:rgba(255,255,255,0.08);color:' + accent + ';border:1px solid ' + accent + '55;border-radius:4px;padding:2px 8px;font-size:0.88rem;font-weight:700">conf: ' + (conf * 100).toFixed(1) + '%</span>'
+                : '';
+            return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:7px;background:' + bg + ';border-left:3px solid ' + accent + ';border-radius:6px;padding:8px 12px;margin-bottom:8px">' +
+                '<span style="font-size:1.05rem">' + emoji + '</span>' +
+                '<span style="background:#1E293B;color:#94A3B8;border-radius:4px;padding:2px 8px;font-size:0.80rem;font-weight:700;letter-spacing:0.07em">STAGE ' + stageNum + '</span>' +
+                '<span style="background:' + accent + ';color:#0F172A;border-radius:4px;padding:2px 10px;font-size:0.88rem;font-weight:800">' + verdict + '</span>' +
+                scoreHtml + confHtml +
+                '</div>';
+        }
+    }
+
+    // Soft voting
+    if (/soft\s*vot/i.test(text)) {
+        return '<div style="display:flex;align-items:center;gap:8px;background:rgba(139,92,246,0.12);border-left:3px solid #A78BFA;border-radius:6px;padding:7px 12px;margin-bottom:8px">' +
+            '<span style="color:#C4B5FD;font-size:0.95rem;font-family:monospace">' + text + '</span>' +
+            '</div>';
+    }
+
+    // Final classification
+    if (/final\s*class/i.test(text)) {
+        var isMalFinal  = /malicious|malware|ransomware/i.test(text);
+        var accentFinal = isMalFinal ? '#F87171' : '#4ADE80';
+        return '<div style="display:flex;align-items:center;gap:10px;background:' + (isMalFinal ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)') + ';border:1.5px solid ' + accentFinal + ';border-radius:7px;padding:10px 14px;margin-top:8px;margin-bottom:4px">' +
+            '<span style="font-size:1.15rem">' + (isMalFinal ? '🚨' : '✅') + '</span>' +
+            '<span style="color:' + accentFinal + ';font-weight:700;font-size:1.0rem">' + text + '</span>' +
+            '</div>';
+    }
+
+    // Plain text
+    return '<div style="padding:3px 12px;margin-bottom:6px">' +
+        '<span style="color:#CBD5E1;font-size:0.95rem;line-height:1.6">' + text + '</span>' +
+        '</div>';
+}
+
 function scanAddLog(text, status) {
     if (!status) status = 'success';
     scanLogs.push({ text, status });
-    const icon = status === 'success' ? '✅' : status === 'warning' ? '⚠️' : '❌';
 
     // Inline log list
     const list = document.getElementById('scan-logs-list');
     if (list) {
-        const div = document.createElement('div');
-        div.className = 'scan-log-entry scan-log-' + status;
-        div.innerHTML = '<span class="scan-log-icon">' + icon + '</span><span>' + text + '</span>';
-        list.appendChild(div);
+        list.insertAdjacentHTML('beforeend', scanRenderLogEntry({ text, status }));
         list.scrollTop = list.scrollHeight;
     }
     const section = document.getElementById('scan-logs-section');
@@ -636,10 +691,7 @@ function scanAddLog(text, status) {
     if (overlay && overlay.style.display !== 'none') {
         const modalBody = document.getElementById('logs-modal-body');
         if (modalBody) {
-            const div = document.createElement('div');
-            div.className = 'logs-modal-entry logs-modal-' + status;
-            div.innerHTML = '<span class="logs-modal-icon">' + icon + '</span><span>' + text + '</span>';
-            modalBody.appendChild(div);
+            modalBody.insertAdjacentHTML('beforeend', scanRenderLogEntry({ text, status }));
             modalBody.scrollTop = modalBody.scrollHeight;
         }
     }
@@ -718,13 +770,10 @@ function scanRenderModal() {
     }
 
     body.innerHTML = scanLogs.map(log => {
-        const icon  = log.status === 'success' ? '✅' : log.status === 'warning' ? '⚠️' : '❌';
-        const extra = (log.status === 'success' && log.text.indexOf('hash') !== -1 && scanFileInfo)
-            ? ' (' + scanFileInfo.hash + ')' : '';
-        return '<div class="logs-modal-entry logs-modal-' + log.status + '">' +
-            '<span class="logs-modal-icon">' + icon + '</span>' +
-            '<span>' + log.text + extra + '</span>' +
-            '</div>';
+        const entry = (log.status === 'success' && log.text.indexOf('hash') !== -1 && scanFileInfo)
+            ? { text: log.text + ' (' + scanFileInfo.hash + ')', status: log.status }
+            : log;
+        return scanRenderLogEntry(entry);
     }).join('');
 
     scanAppendModalResult(body);
@@ -782,13 +831,6 @@ function scanAppendModalResult(bodyEl) {
         body.innerHTML += pHtml;
     }
 
-    // Final classification
-    body.innerHTML +=
-        '<div class="logs-modal-classification ' +
-        (scanResult.is_malicious ? 'classification-malicious' : 'classification-benign') + '">' +
-        '[!] Final classification: <strong>' + scanResult.prediction + '</strong>' +
-        (scanResult.is_malicious ? ' (Severity: <strong>CRITICAL</strong>)' : '') +
-        '</div>';
 
     body.scrollTop = body.scrollHeight;
 

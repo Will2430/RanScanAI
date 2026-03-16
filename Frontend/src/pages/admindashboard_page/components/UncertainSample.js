@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const ROWS_PER_PAGE = 10;
@@ -19,11 +19,7 @@ const UncertainSample = () => {
         return token ? { 'Authorization': 'Bearer ' + token } : {};
     }
 
-    useEffect(() => {
-        fetchUncertainSamples();
-    }, []);
-
-    const fetchUncertainSamples = async () => {
+    const fetchUncertainSamples = useCallback(async () => {
         setLoading(true);
         setError('');
         try {
@@ -37,7 +33,12 @@ const UncertainSample = () => {
             }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            setSamples(data.detections || []);
+            const sorted = (data.detections || []).sort((a, b) => {
+                const ta = a.timestamp || a.date || '';
+                const tb = b.timestamp || b.date || '';
+                return tb.localeCompare(ta);
+            });
+            setSamples(sorted);
             setCurrentPage(1);
         } catch (err) {
             console.error('Failed to fetch uncertain samples:', err);
@@ -45,7 +46,11 @@ const UncertainSample = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [API_BASE]);
+
+    useEffect(() => {
+        fetchUncertainSamples();
+    }, [fetchUncertainSamples]);
 
     const handleReview = async (sampleId, decision) => {
         try {
