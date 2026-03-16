@@ -24,7 +24,7 @@ const api = {
 
     async getDetectionsCount() {
         try {
-            const res = await fetch(`${API_BASE}/api/detections?limit=1`, { headers: authHeaders() });
+            const res = await fetch(`${API_BASE}/scan-history`, { headers: authHeaders() });
             if (!res.ok) return { count: 0, malware: 0 };
             const data = await res.json();
             return { count: data.count ?? 0, malware: 0 };
@@ -503,16 +503,10 @@ function updateDateTime() {
     el.textContent = now.toLocaleDateString('en-GB', options);
 }
 
-// --- Populate UI ---
-async function populateDashboard() {
-    // Date/Time
-    updateDateTime();
-    setInterval(updateDateTime, 30000);
-
-    // Stats for charts + detection count
+// --- Refresh sidebar + charts (called on init and after each scan) ---
+async function refreshDashboardStats() {
+    // Stats + detection count
     const stats = await api.getScanStats();
-
-    // Panel: All Detections count
     const countSpan = document.getElementById('detections-count-val');
     animateCount(countSpan, stats ? (stats.total_scans ?? 0) : 0);
 
@@ -522,7 +516,6 @@ async function populateDashboard() {
     document.getElementById('latest-date').textContent = latest.date;
     document.getElementById('latest-time').textContent = latest.time;
     applySeverityBadge(document.getElementById('latest-severity'), latest.severity);
-    // Animate ring chart — use confidence from latest detection, fallback 0
     const ringPct = latest.confidence ? Math.round(latest.confidence * 100) : 0;
     animateRing(ringPct, latest.severity);
 
@@ -558,6 +551,13 @@ async function populateDashboard() {
     buildBarLegend();
     animateLineChart();
     animateBarChart();
+}
+
+// --- Populate UI ---
+async function populateDashboard() {
+    updateDateTime();
+    setInterval(updateDateTime, 30000);
+    await refreshDashboardStats();
 }
 
 // ============================================================
@@ -618,6 +618,8 @@ function scanAddLog(text, status) {
     if (!status) status = 'success';
     scanLogs.push({ text, status });
     const icon = status === 'success' ? '✅' : status === 'warning' ? '⚠️' : '❌';
+
+    // Inline log list
     const list = document.getElementById('scan-logs-list');
     if (list) {
         const div = document.createElement('div');
@@ -628,6 +630,19 @@ function scanAddLog(text, status) {
     }
     const section = document.getElementById('scan-logs-section');
     if (section) section.style.display = '';
+
+    // Live-append to the expanded modal if it is currently open
+    const overlay = document.getElementById('logs-modal-overlay');
+    if (overlay && overlay.style.display !== 'none') {
+        const modalBody = document.getElementById('logs-modal-body');
+        if (modalBody) {
+            const div = document.createElement('div');
+            div.className = 'logs-modal-entry logs-modal-' + status;
+            div.innerHTML = '<span class="logs-modal-icon">' + icon + '</span><span>' + text + '</span>';
+            modalBody.appendChild(div);
+            modalBody.scrollTop = modalBody.scrollHeight;
+        }
+    }
 }
 
 function scanRenderQuarantine() {
@@ -712,7 +727,37 @@ function scanRenderModal() {
             '</div>';
     }).join('');
 
-    if (scanResult && scanResult.is_malicious && scanBehavioralPatterns.length > 0) {
+    scanAppendModalResult(body);
+
+    if (footer) {
+        if (scanResult) {
+            footer.style.display = '';
+            if (confEl) confEl.textContent = 'Model Confidence: ' + scanResult.confidence + '%';
+        } else {
+            footer.style.display = 'none';
+        }
+    }
+}
+
+// Append behavioral patterns + final classification to the modal body, then update footer.
+// Called both from scanRenderModal (full rebuild) and from the live result handler.
+function scanAppendModalResult(bodyEl) {
+    if (!scanResult) return;
+    const body   = bodyEl || document.getElementById('logs-modal-body');
+    const footer = document.getElementById('logs-modal-footer');
+    const confEl = document.getElementById('logs-modal-confidence');
+    const banner = document.getElementById('logs-modal-banner');
+    if (!body) return;
+
+    // Update banner
+    if (banner) {
+        banner.style.display = '';
+        banner.className = 'logs-modal-banner ' + (scanResult.is_malicious ? 'banner-danger' : 'banner-safe');
+        banner.textContent = 'Scan Completed\u00a0|\u00a0Model Confidence: ' + scanResult.confidence + '%';
+    }
+
+    // Behavioral patterns
+    if (scanResult.is_malicious && scanBehavioralPatterns.length > 0) {
         let pHtml = '<div class="logs-modal-warning-detail">' +
             '<div class="logs-modal-entry logs-modal-warning">' +
                 '<span class="logs-modal-icon">⚠️</span>' +
@@ -737,22 +782,20 @@ function scanRenderModal() {
         body.innerHTML += pHtml;
     }
 
-    if (scanResult) {
-        body.innerHTML +=
-            '<div class="logs-modal-classification ' +
-            (scanResult.is_malicious ? 'classification-malicious' : 'classification-benign') + '">' +
-            '[!] Final classification: <strong>' + scanResult.prediction + '</strong>' +
-            (scanResult.is_malicious ? ' (Severity: <strong>CRITICAL</strong>)' : '') +
-            '</div>';
-    }
+    // Final classification
+    body.innerHTML +=
+        '<div class="logs-modal-classification ' +
+        (scanResult.is_malicious ? 'classification-malicious' : 'classification-benign') + '">' +
+        '[!] Final classification: <strong>' + scanResult.prediction + '</strong>' +
+        (scanResult.is_malicious ? ' (Severity: <strong>CRITICAL</strong>)' : '') +
+        '</div>';
 
+    body.scrollTop = body.scrollHeight;
+
+    // Footer
     if (footer) {
-        if (scanResult) {
-            footer.style.display = '';
-            if (confEl) confEl.textContent = 'Model Confidence: ' + scanResult.confidence + '%';
-        } else {
-            footer.style.display = 'none';
-        }
+        footer.style.display = '';
+        if (confEl) confEl.textContent = 'Model Confidence: ' + scanResult.confidence + '%';
     }
 }
 
@@ -857,20 +900,51 @@ async function handleScan(selectedFile) {
                         })
                         .then(r => r.ok ? r.json() : null)
                         .then(body => {
-                            if (!body || !body.behavioral_patterns || !body.behavioral_patterns.length) return;
-                            const raw = body.behavioral_patterns[0].raw_patterns;
-                            if (!raw) return;
-                            scanBehavioralPatterns = Object.entries(raw)
-                                .filter(([, v]) => v.detected)
-                                .slice(0, 5)
-                                .map(([k, v]) => ({
-                                    label       : k,
-                                    confidence  : v.confidence ? (v.confidence * 100).toFixed(0) + '%' : null,
-                                    description : v.description || '',
-                                    evidence    : v.evidence || [],
-                                }));
+                            if (body && body.behavioral_patterns && body.behavioral_patterns.length) {
+                                const raw = body.behavioral_patterns[0].raw_patterns;
+                                if (raw) {
+                                    scanBehavioralPatterns = Object.entries(raw)
+                                        .filter(([, v]) => v.detected)
+                                        .slice(0, 5)
+                                        .map(([k, v]) => {
+                                            const cf = parseFloat(v.confidence);
+                                            const confStr = !isNaN(cf)
+                                                ? (cf <= 1 ? (cf * 100).toFixed(0) + '%' : cf.toFixed(0) + '%')
+                                                : (v.confidence ? String(v.confidence).toUpperCase() : null);
+                                            return {
+                                                label       : k,
+                                                confidence  : confStr,
+                                                description : v.description || '',
+                                                evidence    : v.evidence || [],
+                                            };
+                                        });
+                                }
+                            }
+                            // Finalize modal now that patterns are loaded
+                            const overlay = document.getElementById('logs-modal-overlay');
+                            if (overlay && overlay.style.display !== 'none') {
+                                scanAppendModalResult(null);
+                            }
                         })
-                        .catch(() => {});
+                        .catch(() => {
+                            // Finalize modal even if patterns fetch fails
+                            const overlay = document.getElementById('logs-modal-overlay');
+                            if (overlay && overlay.style.display !== 'none') {
+                                scanAppendModalResult(null);
+                            }
+                        });
+                    } else {
+                        // No scan_id — finalize modal now (no patterns to wait for)
+                        const overlay = document.getElementById('logs-modal-overlay');
+                        if (overlay && overlay.style.display !== 'none') {
+                            scanAppendModalResult(null);
+                        }
+                    }
+                } else {
+                    // Benign — no patterns fetch, finalize modal immediately
+                    const overlay = document.getElementById('logs-modal-overlay');
+                    if (overlay && overlay.style.display !== 'none') {
+                        scanAppendModalResult(null);
                     }
                 }
 
@@ -878,6 +952,8 @@ async function handleScan(selectedFile) {
                 if (stopBtn) stopBtn.style.display = 'none';
                 es.close();
                 scanEs = null;
+                // Sync sidebar + charts with the new detection
+                refreshDashboardStats();
 
             } else if (msg.type === 'error') {
                 scanAddLog(msg.msg, 'error');

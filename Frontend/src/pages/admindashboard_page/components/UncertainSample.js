@@ -47,26 +47,6 @@ const UncertainSample = () => {
         }
     };
 
-    const handleBulkApprove = async () => {
-        // Approve all samples currently visible in the filtered list
-        const ids = filtered.map(s => s.id);
-        if (ids.length === 0) return;
-        try {
-            const res = await fetch(`${API_BASE}/api/detections/admin/bulk-approve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({ scan_ids: ids }),
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-            alert(`✓ ${data.approved_count} sample(s) approved for retraining.`);
-            fetchUncertainSamples();
-        } catch (err) {
-            console.error('Bulk approve failed:', err);
-            alert('Failed to approve samples. Please try again.');
-        }
-    };
-
     const handleReview = async (sampleId, decision) => {
         try {
             const res = await fetch(`${API_BASE}/api/detections/admin/review/${sampleId}`, {
@@ -117,24 +97,6 @@ const UncertainSample = () => {
         return pages;
     };
 
-    const getVtBadge = (status) => {
-        const base = {
-            padding: '2px 6px', borderRadius: '10px',
-            fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap',
-        };
-        if (!status) return <span style={{ ...base, background: '#eee', color: '#999' }}>—</span>;
-        const map = {
-            PENDING:   { background: '#e8e8e8', color: '#666' },
-            UPLOADING: { background: '#fff3cd', color: '#856404' },
-            SCANNING:  { background: '#fff3cd', color: '#856404' },
-            VALIDATED: { background: '#d4edda', color: '#155724' },
-            FAILED:    { background: '#f8d7da', color: '#721c24' },
-        };
-        const style = map[status] || map.PENDING;
-        const label = (status === 'UPLOADING' || status === 'SCANNING') ? 'In Review' : status.charAt(0) + status.slice(1).toLowerCase();
-        return <span style={{ ...base, ...style }}>{label}</span>;
-    };
-
     return (
         <div>
             {/* Header row */}
@@ -147,31 +109,14 @@ const UncertainSample = () => {
                         </span>
                     )}
                 </h3>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <button
-                        onClick={() => navigate('/admin/retrain')}
-                        className="export-btn"
-                        style={{ background: '#004E89', color: '#fff', borderColor: '#004E89' }}
-                    >
-                         Retrain Center
-                    </button>
-                    <button
-                        onClick={handleBulkApprove}
-                        disabled={loading || filtered.length === 0}
-                        className="export-btn"
-                        style={{ background: '#28a745', color: '#fff', borderColor: '#28a745', opacity: (loading || filtered.length === 0) ? 0.5 : 1 }}
-                    >
-                        ✓ Approve All for Retrain
-                    </button>
-                    <button
-                        onClick={fetchUncertainSamples}
-                        disabled={loading}
-                        className="export-btn"
-                        style={{ opacity: loading ? 0.6 : 1 }}
-                    >
-                        🔄 Refresh
-                    </button>
-                </div>
+                <button
+                    onClick={fetchUncertainSamples}
+                    disabled={loading}
+                    className="export-btn"
+                    style={{ opacity: loading ? 0.6 : 1 }}
+                >
+                    🔄 Refresh
+                </button>
             </div>
 
             {/* Error */}
@@ -210,17 +155,16 @@ const UncertainSample = () => {
             ) : !error && (
                 <>
                     <div className="table-wrapper">
-                        <table className="data-table uncertain-table" style={{ tableLayout: 'fixed' }}>
+                        <table className="data-table" style={{ tableLayout: 'fixed' }}>
                             <colgroup>
-                                <col style={{ width: '5%' }} />   {/* # */}
+                                <col style={{ width: '4%' }} />   {/* # */}
                                 <col style={{ width: '22%' }} />  {/* File Name */}
                                 <col style={{ width: '10%' }} />  {/* User */}
-                                <col style={{ width: '10%' }} />   {/* Role */}
-                                <col style={{ width: '13%' }} />  {/* AI Prediction */}
-                                <col style={{ width: '10%' }} />  {/* Confidence */}
-                                <col style={{ width: '15%' }} />  {/* Date */}
-                                <col style={{ width: '10%' }} />   {/* VT Status */}
-                                <col style={{ width: '9%' }} />   {/* View */}
+                                <col style={{ width: '7%' }} />   {/* Role */}
+                                <col style={{ width: '10%' }} />  {/* AI Prediction */}
+                                <col style={{ width: '9%' }} />   {/* Confidence */}
+                                <col style={{ width: '16%' }} />  {/* Date */}
+                                <col style={{ width: '6%' }} />   {/* View */}
                                 <col style={{ width: '16%' }} />  {/* Actions */}
                             </colgroup>
                             <thead>
@@ -232,7 +176,6 @@ const UncertainSample = () => {
                                     <th>AI Prediction</th>
                                     <th>Confidence</th>
                                     <th>Date &amp; Time</th>
-                                    <th>VT Status</th>
                                     <th>Details</th>
                                     <th>Actions</th>
                                 </tr>
@@ -254,10 +197,11 @@ const UncertainSample = () => {
                                             {sample.file_name}
                                         </td>
                                         <td>{sample.username || '—'}</td>
-                                        <td><span className={`severity-badge ${sample.role === 'admin' ? 'high' : 'low'}`}>
-                                            {sample.role}</span></td>
+                                        <td style={{ textTransform: 'capitalize', color: '#555', fontSize: '0.9rem' }}>
+                                            {sample.role || '—'}
+                                        </td>
                                         <td>
-                                            <span className={`status-badge ${sample.prediction_label === 'MALICIOUS' ? 'status-malware' : 'status-benign'}`}>
+                                            <span className={`status-badge ${sample.prediction_label === 'MALWARE' ? 'status-malware' : 'status-benign'}`}>
                                                 {sample.prediction_label}
                                             </span>
                                         </td>
@@ -266,9 +210,6 @@ const UncertainSample = () => {
                                         </td>
                                         <td style={{ fontSize: '0.88rem', color: '#555' }}>
                                             {sample.date || sample.display_time}
-                                        </td>
-                                        <td style={{ textAlign: 'center' }}>
-                                            {getVtBadge(sample.vt_status)}
                                         </td>
                                         <td style={{ textAlign: 'center' }}>
                                             <button

@@ -8,7 +8,6 @@ import ChartSection from './components/ChartSection';
 import DataTable from './components/DataTable';
 import UncertainSample from './components/UncertainSample';
 import MonthlySummaryTable from './components/MonthlySummaryTable';
-import ModelVersionSelector from './components/ModelVersionSelector';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
 
@@ -163,9 +162,6 @@ const AdminDash = () => {
                     </div>
                 ) : (
                     <>
-                        {/* Model Version Selector */}
-                        <ModelVersionSelector />
-
                         {/* Statistics Cards + Scan Panel Container */}
                         <div className="stats-scan-container">
                             <div className="stats-grid">
